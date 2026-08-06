@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Project Plan Generator</title>
+  <style>
+    :root {
+      --primary-color: #0056b3;
+      --bg-color: #f8f9fa;
+      --card-bg: #ffffff;
+      --border-color: #dee2e6;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background-color: var(--bg-color);
+      margin: 0;
+      padding: 20px;
+      color: #333;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    h1 {
+      color: var(--primary-color);
+      margin-top: 0;
+    }
+    .upload-section {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 25px;
+    }
+    .dropzone {
+      border: 2px dashed var(--border-color);
+      border-radius: 6px;
+      padding: 20px;
+      text-align: center;
+      background: #fafafa;
+      cursor: pointer;
+    }
+    .dropzone:hover {
+      border-color: var(--primary-color);
+    }
+    .preview-card {
+      background: #f1f5f9;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 20px;
+      margin-bottom: 25px;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 3fr 1fr;
+      gap: 15px;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+    input[type="text"], input[type="date"] {
+      width: 100%;
+      padding: 8px;
+      box-sizing: border-box;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+    }
+    .btn {
+      background-color: var(--primary-color);
+      color: white;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 4px;
+      font-size: 16px;
+      cursor: pointer;
+      width: 100%;
+    }
+    .btn:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: bold;
+      margin-bottom: 15px;
+      background-color: #e2e3e5;
+      color: #383d41;
+    }
+  </style>
+
+  <!-- External CDN Libraries for In-Browser Execution on GitHub Pages -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pizzip/3.1.4/pizzip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/docxtemplater/3.37.11/docxtemplater.js"></script>
+</head>
+<body>
+
+<div class="container">
+  <h1>Project Plan Generator</h1>
+  <p>Upload your Work Assignment Brief (WAB) and Project Plan Template (`.docx`) to generate your proposal document.</p>
+
+  <div class="upload-section">
+    <div class="dropzone">
+      <h3>1. Work Assignment Brief</h3>
+      <input type="file" id="wabInput" accept=".docx">
+    </div>
+    <div class="dropzone">
+      <h3>2. Project Plan Template</h3>
+      <input type="file" id="templateInput" accept=".docx">
+    </div>
+  </div>
+
+  <!-- Extraction Preview & Manual Input Panel -->
+  <div class="preview-card" id="previewPanel">
+    <h2>Document Metadata & Manual Overrides</h2>
+    <p>Please verify the extracted information below. You can manually enter or edit any fields if needed.</p>
+
+    <div class="form-grid">
+      <div class="form-group">
+        <label for="fieldDeptName">Department Name:</label>
+        <input type="text" id="fieldDeptName" placeholder="e.g., Education Bureau">
+      </div>
+      <div class="form-group">
+        <label for="fieldDeptAbbr">Abbr:</label>
+        <input type="text" id="fieldDeptAbbr" placeholder="e.g., EDB">
+      </div>
+    </div>
+
+    <div class="form-grid">
+      <div class="form-group">
+        <label for="fieldSystemName">System / Service Name:</label>
+        <input type="text" id="fieldSystemName" placeholder="e.g., Coaching Programme on Executive Skills">
+      </div>
+      <div class="form-group">
+        <label for="fieldSystemAbbr">Abbr:</label>
+        <input type="text" id="fieldSystemAbbr" placeholder="e.g., e-COPES">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="fieldStartDate">Tentative Start Date Anchor:</label>
+      <input type="date" id="fieldStartDate">
+    </div>
+  </div>
+
+  <button class="btn" id="generateBtn" disabled>Generate Project Plan (.docx)</button>
+</div>
+
+<!-- Main Logic Engine -->
+<script src="app.js"></script>
+</body>
+</html>
