@@ -90,8 +90,8 @@
         }
         initPyodideEngine();
 
-        // Repository Template Fetcher with fallback path resolution
-        async function fetchRepoTemplate(filename) {
+        // Universal Fetch Helper across Environment Deployment Paths
+        async function fetchTemplateFile(filename) {
             const encodedFilename = encodeURIComponent(filename);
             const relativePath = `./${encodedFilename}`;
             const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
@@ -108,7 +108,7 @@
                     }
                 } catch (e) {}
             }
-            throw new Error(`Could not locate repository template '${filename}'. Verify file is present in repository.`);
+            throw new Error(`Could not locate repository template '${filename}'. Verify that 'Project Plan template_4.docx' is stored in the repository root.`);
         }
 
         // Handle File Selection
