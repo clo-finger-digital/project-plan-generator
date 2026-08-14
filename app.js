@@ -15,7 +15,7 @@ async function loadRepositoryTemplate() {
       throw new Error(`HTTP ${response.status}: Failed to fetch "${TEMPLATE_FILE_NAME}"`);
     }
     repositoryTemplateBuffer = await response.arrayBuffer();
-    console.log(`[App] Successfully cached repository template: ${TEMPLATE_FILE_NAME}`);
+    console.log(`[App] Successfully loaded repository template: ${TEMPLATE_FILE_NAME}`);
     return true;
   } catch (error) {
     console.error("[App] Template load error:", error);
@@ -33,7 +33,7 @@ async function extractWabDataFromFile(file) {
 
   const mammothEngine = window.mammoth;
   if (!mammothEngine || typeof mammothEngine.extractRawText !== 'function') {
-    throw new Error("Mammoth library is not available. Ensure mammoth script tag is included.");
+    throw new Error("Mammoth library is not loaded. Ensure mammoth.browser.min.js script tag is present.");
   }
 
   const fileBuffer = await file.arrayBuffer();
@@ -99,8 +99,7 @@ function extractSystemsFromText(text) {
 }
 
 /**
- * Generates and triggers browser download for the populated Word document.
- * Includes explicit handling for Docxtemplater MultiError instances.
+ * Generates and downloads the populated Word document with explicit MultiError handling.
  */
 async function generateAndDownloadDocx(formData, originalFileName) {
   if (!repositoryTemplateBuffer) {
@@ -131,15 +130,15 @@ async function generateAndDownloadDocx(formData, originalFileName) {
     DATE_CLOSURE: formData.TENTATIVE_COMPLETION_DATE || "October 2026"
   };
 
-  // Safe resolver for constructors across CDNs
+  // Resolve constructor across CDNs
   const PizZipConstructor = window.PizZip || window.pizzip || (window.docxtemplater && window.docxtemplater.PizZip);
   const DocxtemplaterConstructor = window.docxtemplater || window.Docxtemplater;
 
   if (!PizZipConstructor) {
-    throw new Error("PizZip library missing. Ensure pizzip script tag is included.");
+    throw new Error("PizZip engine missing. Verify CDN script tags in index.html.");
   }
   if (!DocxtemplaterConstructor) {
-    throw new Error("Docxtemplater library missing. Ensure docxtemplater script tag is included.");
+    throw new Error("Docxtemplater engine missing. Verify CDN script tags in index.html.");
   }
 
   const zip = new PizZipConstructor(repositoryTemplateBuffer);
@@ -151,13 +150,13 @@ async function generateAndDownloadDocx(formData, originalFileName) {
   try {
     doc.render(templateContext);
   } catch (error) {
-    // Catch Docxtemplater MultiError and extract broken tag names
+    // Unroll MultiError details from docxtemplater
     if (error.properties && error.properties.errors instanceof Array) {
-      const errorMessages = error.properties.errors
+      const details = error.properties.errors
         .map(e => e.properties && e.properties.explanation ? e.properties.explanation : e.message)
         .join(" | ");
-      console.error("[Docxtemplater MultiError Details]:", error.properties.errors);
-      throw new Error(`Template Syntax Error: ${errorMessages}`);
+      console.error("[Docxtemplater MultiError Breakdown]:", error.properties.errors);
+      throw new Error(`Template Syntax Error inside "Project Plan template.docx": ${details}`);
     }
     throw error;
   }
@@ -177,7 +176,7 @@ async function generateAndDownloadDocx(formData, originalFileName) {
   URL.revokeObjectURL(downloadUrl);
 }
 
-// Export functions to window scope
+// Global Exports
 window.loadRepositoryTemplate = loadRepositoryTemplate;
 window.extractWabDataFromFile = extractWabDataFromFile;
 window.generateAndDownloadDocx = generateAndDownloadDocx;
