@@ -15,7 +15,7 @@ async function loadRepositoryTemplate() {
       throw new Error(`HTTP ${response.status}: Failed to fetch "${TEMPLATE_FILE_NAME}"`);
     }
     repositoryTemplateBuffer = await response.arrayBuffer();
-    console.log(`[App] Successfully loaded repository template: ${TEMPLATE_FILE_NAME}`);
+    console.log(`[App] Successfully cached repository template: ${TEMPLATE_FILE_NAME}`);
     return true;
   } catch (error) {
     console.error("[App] Template load error:", error);
@@ -108,6 +108,7 @@ async function generateAndDownloadDocx(formData, originalFileName) {
 
   const currentDateStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
+  // Supply defaults for ALL possible template variables to prevent undefined key errors
   const templateContext = {
     DEPARTMENT_NAME: formData.DEPARTMENT_NAME || "Government Department",
     DEPARTMENT_ABBR: formData.DEPARTMENT_ABBR || "GOV",
@@ -130,7 +131,7 @@ async function generateAndDownloadDocx(formData, originalFileName) {
     DATE_CLOSURE: formData.TENTATIVE_COMPLETION_DATE || "October 2026"
   };
 
-  // Resolve constructor across CDNs
+  // Safe resolver for constructors across CDNs
   const PizZipConstructor = window.PizZip || window.pizzip || (window.docxtemplater && window.docxtemplater.PizZip);
   const DocxtemplaterConstructor = window.docxtemplater || window.Docxtemplater;
 
@@ -142,21 +143,27 @@ async function generateAndDownloadDocx(formData, originalFileName) {
   }
 
   const zip = new PizZipConstructor(repositoryTemplateBuffer);
+  
+  // Initialize Docxtemplater with strict XML paragraph loop handling
   const doc = new DocxtemplaterConstructor(zip, {
     paragraphLoop: true,
     linebreaks: true,
+    delimiters: { start: '{{', end: '}}' }
   });
 
   try {
     doc.render(templateContext);
   } catch (error) {
-    // Unroll MultiError details from docxtemplater
+    // Catch Docxtemplater MultiError and list exact tag errors
     if (error.properties && error.properties.errors instanceof Array) {
-      const details = error.properties.errors
-        .map(e => e.properties && e.properties.explanation ? e.properties.explanation : e.message)
-        .join(" | ");
-      console.error("[Docxtemplater MultiError Breakdown]:", error.properties.errors);
-      throw new Error(`Template Syntax Error inside "Project Plan template.docx": ${details}`);
+      const errorDetails = error.properties.errors.map(e => {
+        const tag = e.properties && e.properties.id ? ` Tag: "${e.properties.id}"` : '';
+        const explanation = e.properties && e.properties.explanation ? e.properties.explanation : e.message;
+        return `${explanation}${tag}`;
+      }).join(' | ');
+      
+      console.error("[Docxtemplater MultiError Unhandled List]:", error.properties.errors);
+      throw new Error(`Template Format Error in Word document: ${errorDetails}`);
     }
     throw error;
   }
