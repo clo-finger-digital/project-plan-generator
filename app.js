@@ -63,7 +63,7 @@ async function extractWabDataFromFile(file) {
   const completionDate = dates.length > 0 ? dates[dates.length - 1] : "";
   const startDate = dates.length > 1 ? dates[0] : "";
 
-  // 5. Dynamic Scope & Objectives Extraction directly from WAB (No generic fallbacks)
+  // 5. Dynamic Scope & Objectives Extraction directly from WAB
   const extractedSraaObjectives = extractSraaObjectives(text);
   const extractedPiaaObjectives = hasPia ? extractPiaaObjectives(text) : "";
   const extractedSraaScope = extractSraaScope(text);
@@ -84,46 +84,65 @@ async function extractWabDataFromFile(file) {
 }
 
 /**
- * Robustly extracts ALL bullet items verbatim from Section 1 (SCOPE OF THE SERVICES).
+ * Robustly extracts ALL items verbatim from Section 1 (SCOPE OF THE SERVICES).
+ * Strictly targets Section 1 body while bypassing TOC entries and Annex references.
  */
 function extractSraaScope(text) {
   if (!text) return "";
 
-  const matches = [...text.matchAll(/SCOPE OF THE SERVICES([\s\S]*?)(?=(?:\bBACKGROUND\b|2\.\s*BACKGROUND|\bPROJECT OBJECTIVES\b|$))/gi)];
+  // Find all matches for SCOPE OF THE SERVICES up to BACKGROUND
+  const scopeRegex = /SCOPE OF THE SERVICES([\s\S]*?)(?=\n\s*BACKGROUND\b|\n\s*2\.\s*BACKGROUND)/gi;
+  let matches = [];
+  let m;
+
+  while ((m = scopeRegex.exec(text)) !== null) {
+    matches.push(m[1]);
+  }
 
   if (matches.length === 0) return "";
 
-  let rawScopeText = matches[matches.length - 1][1];
+  // Pick the match with the longest content (to ignore Table of Contents entries)
+  let rawScope = matches.reduce((a, b) => (a.length > b.length ? a : b), "");
 
-  // Remove administrative intro paragraph
-  rawScopeText = rawScopeText.replace(/As a SOA Contractor in Category B[\s\S]*?invited to provide the following services.*?:/i, '');
+  // Strip administrative introduction
+  rawScope = rawScope.replace(/^[\s\S]*?invited to provide the following services.*?:/i, '');
 
-  // Strip trailing SOA terms and price boilerplates if present
-  rawScopeText = rawScopeText.replace(/Unless otherwise defined in this Brief[\s\S]*$/i, '');
-  rawScopeText = rawScopeText.replace(/This work assignment is fixed cost project[\s\S]*$/i, '');
-  rawScopeText = rawScopeText.replace(/The total price quoted in Price Proposal[\s\S]*$/i, '');
+  // Remove trailing financial / contractual boilerplates at the end of Section 1
+  rawScope = rawScope.replace(/Unless otherwise defined in this Brief[\s\S]*$/i, '');
+  rawScope = rawScope.replace(/This work assignment is fixed cost project[\s\S]*$/i, '');
+  rawScope = rawScope.replace(/The total price quoted in Price Proposal[\s\S]*$/i, '');
 
-  const cleanScope = rawScopeText
+  // Format into clean double-spaced paragraphs
+  const cleanLines = rawScope
     .split(/\n+/)
     .map(line => line.trim())
-    .filter(line => line.length > 0)
-    .join('\n\n');
+    .filter(line => line.length > 0 && !line.startsWith('TABLE OF CONTENTS'));
 
-  return cleanScope;
+  return cleanLines.join('\n\n');
 }
 
 /**
  * Robustly extracts ALL items starting with "It is to..." verbatim inside Section 3 (PROJECT OBJECTIVES).
+ * Formats every bullet point as: (a) It is to... (b) It is to...
  */
 function extractSraaObjectives(text) {
   if (!text) return "";
 
-  const matches = [...text.matchAll(/PROJECT OBJECTIVES([\s\S]*?)(?=(?:PROJECT REQUIREMENTS|4\.\s*PROJECT REQUIREMENTS|\bUSER REQUIREMENTS\b|$))/gi)];
+  // Isolate Section 3 content specifically between "PROJECT OBJECTIVES" and "PROJECT REQUIREMENTS"
+  const objRegex = /PROJECT OBJECTIVES([\s\S]*?)(?=\n\s*PROJECT REQUIREMENTS|\n\s*4\.\s*PROJECT REQUIREMENTS)/gi;
+  let matches = [];
+  let m;
+
+  while ((m = objRegex.exec(text)) !== null) {
+    matches.push(m[1]);
+  }
 
   if (matches.length === 0) return "";
 
-  const rawSectionText = matches[matches.length - 1][1];
+  // Choose the actual content block (longest match, bypassing TOC)
+  const rawSectionText = matches.reduce((a, b) => (a.length > b.length ? a : b), "");
 
+  // Split on "It is to" boundary
   const items = [];
   const parts = rawSectionText.split(/\b(?=It is to\b)/i);
 
