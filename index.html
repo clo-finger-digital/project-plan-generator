@@ -19,7 +19,7 @@
         <section class="bg-slate-800 rounded-lg p-6 border border-slate-700 shadow-xl space-y-6">
             <h2 class="text-xl font-bold text-white mb-2">1. Upload WAB Source Document</h2>
             
-            <div class="p-6 bg-slate-950 border border-dashed border-blue-500/50 rounded-lg text-center cursor-pointer" onclick="document.getElementById('wab_file_input').click()">
+            <div class="p-6 bg-slate-950 border border-dashed border-blue-500/50 rounded-lg text-center cursor-pointer hover:border-blue-400 transition-colors" onclick="document.getElementById('wab_file_input').click()">
                 <p id="file_label_text" class="text-sm font-semibold text-blue-400">📁 Click or Drag & Drop WAB Brief File (.docx) Here</p>
                 <input type="file" id="wab_file_input" accept=".docx" class="hidden" onchange="handleFileChange(event)">
             </div>
@@ -128,31 +128,31 @@
             // Auto-extract metadata and populate input fields
             const extractScript = `
 import re
-import json
 from docx import Document
 
 doc = Document("input_wab.docx")
-
-title_text = " ".join([p.text.strip() for p in doc.paragraphs[:25] if p.text.strip()])
-clean_title = re.sub(r'\\s+', ' ', title_text).replace("“", '"').replace("”", '"')
 
 full_text = "\\n".join([p.text.strip() for p in doc.paragraphs if p.text.strip()])
 
 dept_name = ""
 dept_abbr = ""
 
-m_of = re.search(r'\\bof\\s+the\\s+([A-Z][A-Za-z\\s&,\\-\\.]{2,60}?)(?=\\s*(?:Version|Category|Date|\\d{4}|$))', clean_title, re.IGNORECASE)
-if m_of:
-    dept_name = m_of.group(1).strip()
+m_dept = re.search(r'(?:Education Bureau|Immigration Department|Civil Service Bureau|Customs and Excise Department|[A-Z][A-Za-z\\s]+(?:Bureau|Department|Office))', full_text)
+if m_dept:
+    dept_name = m_dept.group(0).strip()
 
-if dept_name:
-    m_abbr = re.search(fr'{re.escape(dept_name)}\\s*(?:\\([^\\)]*\\))?\\s*[\\(“"]([A-Z0-9]{{2,10}})[\\)”"]', full_text, re.IGNORECASE)
-    if m_abbr:
-        dept_abbr = m_abbr.group(1).strip().upper()
+m_abbr = re.search(r'\\b(EDB|ImmD|CSB|C&ED|HKPF|ArchSD|HD)\\b', full_text)
+if m_abbr:
+    dept_abbr = m_abbr.group(1).strip()
 
-sys_matches = re.findall(r'([A-Z][A-Za-z0-9\\s&,\\-\\.]{3,70})\\s*\\(([A-Z0-9\\-]{2,12})\\)', full_text)
-sys_name = sys_matches[0][0].strip() if sys_matches else "Selected Information System"
-sys_abbr = sys_matches[0][1].strip().upper() if sys_matches else "SYSTEM"
+sys_matches = re.findall(r'([A-Z][A-Za-z0-9\\s&,\\-\\.\'\"]{3,70})\\s*\\(([A-Z0-9\\-]{2,12})\\)', full_text)
+sys_name = sys_matches[0][0].strip() if sys_matches else ""
+sys_abbr = sys_matches[0][1].strip().upper() if sys_matches else ""
+
+if not sys_name:
+    m_sys = re.search(r'in relation to\\s+["\'“]([^"\'”]+)["\'”]', full_text, re.IGNORECASE)
+    if m_sys:
+        sys_name = m_sys.group(1).strip()
 
 import js
 js.updateFields(sys_name, sys_abbr, dept_name, dept_abbr)
@@ -219,27 +219,47 @@ dept_abbr = JS_DEPT_ABBR
 
 now = datetime.datetime.now()
 version_date = now.strftime("%B %Y")
-completion_date = (now + datetime.timedelta(days=120)).strftime("%d %B %Y")
 
 wab_doc = Document("input_wab.docx")
 full_wab_text = "\\n".join([p.text.strip() for p in wab_doc.paragraphs if p.text.strip()])
 
-# Check for Privacy Impact Assessment (PIA/PIAA) requirement
-has_pia = bool(re.search(r'Privacy Impact Assessment|PIAA|PIA', full_wab_text, re.IGNORECASE))
+# 1. Determine Start Date Anchor
+m_start = re.search(r'(?:tentative start date|commence on|conducted from)[^\\.\\n]*?is\\s+([A-Za-z]+\\s+\\d{4}|\\d{1,2}\\s+[A-Za-z]+\\s+\\d{4})', full_wab_text, re.IGNORECASE)
+base_date = now
+if m_start:
+    try:
+        raw_date_str = m_start.group(1).strip()
+        for fmt in ("%B %Y", "%d %B %Y", "%b %Y"):
+            try:
+                base_date = datetime.datetime.strptime(raw_date_str, fmt)
+                break
+            except ValueError:
+                pass
+    except Exception:
+        base_date = now
 
-# Extract SRAA Objectives
-sraa_obj_matches = re.findall(r'(?:Security Risk Assessment and Audit|SRAA)[^\\n]*\\n([\\s\\S]*?)(?=(?:Privacy Impact Assessment|Scope of Service|\\d\\.|\\Z))', full_wab_text, re.IGNORECASE)
-sraa_objectives = sraa_obj_matches[0].strip() if sraa_obj_matches else "• Evaluate security risks and identify necessary safeguards.\\n• Review and update IT security documents.\\n• Determine compliance with S17 and G3 guidelines."
+def add_days(d, days):
+    return (d + datetime.timedelta(days=days)).strftime("%d/%m/%Y")
 
-# Extract PIAA Objectives if present
+def add_weeks(d, weeks):
+    return add_days(d, weeks * 7)
+
+# 2. Check for Privacy Impact Assessment (PIA/PIAA)
+has_pia = bool(re.search(r'Privacy Impact Assessment|PIAA|PIA\\b', full_wab_text, re.IGNORECASE))
+
+# 3. Extract Section Content
+sraa_obj_matches = re.findall(r'(?:PROJECT OBJECTIVES|Project Objectives)[^\\n]*\\n([\\s\\S]*?)(?=(?:PROJECT REQUIREMENTS|SCOPE OF THE SERVICES|Scope of Service|\\d\\.|\\Z))', full_wab_text, re.IGNORECASE)
+sraa_objectives = sraa_obj_matches[0].strip() if sraa_obj_matches else "Evaluate security risks, check compliance with S17 and G3 guidelines, and recommend safeguards."
+
 piaa_objectives = ""
 if has_pia:
-    piaa_obj_matches = re.findall(r'(?:Privacy Impact Assessment and Audit|PIAA)[^\\n]*\\n([\\s\\S]*?)(?=(?:Scope of Service|Approach|\\d\\.|\\Z))', full_wab_text, re.IGNORECASE)
-    piaa_objectives = piaa_obj_matches[0].strip() if piaa_obj_matches else "• Perform privacy risk analysis under Cap. 486.\\n• Provide recommendations for privacy risk mitigation.\\n• Conduct Privacy Compliance Audit (PCA)."
+    piaa_obj_matches = re.findall(r'(?:Privacy Impact Assessment|PIAA)[^\\n]*\\n([\\s\\S]*?)(?=(?:SCOPE OF THE SERVICES|Scope of Service|\\d\\.|\\Z))', full_wab_text, re.IGNORECASE)
+    piaa_objectives = piaa_obj_matches[0].strip() if piaa_obj_matches else "Identify data privacy risks, analyze data processing cycles, and ensure Cap. 486 compliance."
 
-# Extract SRAA Scope
-sraa_scope_matches = re.findall(r'(?:Scope of Service)[^\\n]*\\n([\\s\\S]*?)(?=(?:Privacy Impact Assessment|Approach|\\d\\.|\\Z))', full_wab_text, re.IGNORECASE)
+sraa_scope_matches = re.findall(r'(?:SCOPE OF THE SERVICES|Scope of Service)[^\\n]*\\n([\\s\\S]*?)(?=(?:BACKGROUND|PROJECT OBJECTIVES|\\d\\.|\\Z))', full_wab_text, re.IGNORECASE)
 sraa_scope = sraa_scope_matches[0].strip() if sraa_scope_matches else "Covers general control review, technical vulnerability scanning, penetration testing, configuration review, and source code review."
+
+completion_date = add_weeks(base_date, 12)
 
 replacements = {
     "{{SYSTEM_NAME}}": sys_name,
@@ -251,55 +271,49 @@ replacements = {
     "{{SRAA_OBJECTIVES}}": sraa_objectives,
     "{{PIAA_OBJECTIVES}}": piaa_objectives,
     "{{SRAA_SCOPE}}": sraa_scope,
-    "{{DATE_STAGE_0}}": "End of week 1",
-    "{{DATE_INTRO_MEETING}}": "End of week 1",
-    "{{DATE_PROJECT_PLAN}}": "End of week 2",
-    "{{DATE_CHECKLISTS}}": "End of week 3",
-    "{{DATE_SRAA_COMPLETION}}": "End of week 8",
-    "{{DATE_PRESENTATION}}": "End of week 9",
+    "{{DATE_STAGE_0}}": add_weeks(base_date, 1),
+    "{{DATE_INTRO_MEETING}}": add_days(base_date, 10),
+    "{{DATE_PROJECT_PLAN}}": add_weeks(base_date, 2),
+    "{{DATE_CHECKLISTS}}": add_weeks(base_date, 3),
+    "{{DATE_SRAA_COMPLETION}}": add_weeks(base_date, 8),
+    "{{DATE_PRESENTATION}}": add_weeks(base_date, 9),
     "{{DATE_CLOSURE}}": completion_date
 }
 
 plan_doc = Document("project_plan_template.docx")
 
-def replace_pointers_in_paragraph(p):
+def replace_and_clean_paragraph(p):
     full_p_text = "".join(r.text for r in p.runs)
     if not full_p_text.strip():
         return
-    
-    modified = False
+
+    # Apply tag replacements
     for key, val in replacements.items():
         if key in full_p_text:
             full_p_text = full_p_text.replace(key, val)
-            modified = True
-            
-    if modified:
-        if p.runs:
-            p.runs[0].text = full_p_text
-            for r in p.runs[1:]:
-                r.text = ""
-        else:
-            p.text = full_p_text
 
-# Replace in body paragraphs and tables
+    # Process conditional markers
+    full_p_text = full_p_text.replace("{{#HAS_PIA}}", "").replace("{{/HAS_PIA}}", "")
+
+    # Cleanup any lingering template tags
+    full_p_text = re.sub(r'\\{\\{.*?\\}\\}', '', full_p_text)
+
+    if p.runs:
+        p.runs[0].text = full_p_text
+        for r in p.runs[1:]:
+            r.text = ""
+    else:
+        p.text = full_p_text
+
+# Replace in body paragraphs and table cells
 for p in plan_doc.paragraphs:
-    replace_pointers_in_paragraph(p)
+    replace_and_clean_paragraph(p)
 
 for table in plan_doc.tables:
     for row in table.rows:
         for cell in row.cells:
             for cell_p in cell.paragraphs:
-                replace_pointers_in_paragraph(cell_p)
-
-# Process Conditional Blocks: {{#HAS_PIA}} ... {{/HAS_PIA}}
-def process_conditional_blocks(doc, keep_block):
-    for p in doc.paragraphs:
-        if "{{#HAS_PIA}}" in p.text:
-            p.text = p.text.replace("{{#HAS_PIA}}", "")
-        if "{{/HAS_PIA}}" in p.text:
-            p.text = p.text.replace("{{/HAS_PIA}}", "")
-
-process_conditional_blocks(plan_doc, has_pia)
+                replace_and_clean_paragraph(cell_p)
 
 plan_doc.save("Populated_Project_Plan.docx")
 print("Project Plan successfully populated and saved!")
