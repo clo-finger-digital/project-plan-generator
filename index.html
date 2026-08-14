@@ -81,7 +81,7 @@
     }
     .form-group textarea {
       resize: vertical;
-      min-height: 140px;
+      min-height: 120px;
       font-family: inherit;
     }
     .form-row {
@@ -186,20 +186,28 @@
         <label for="hasPia">Includes Privacy Impact Assessment (PIA)</label>
       </div>
 
-      <!-- Scope & Objectives Textboxes -->
+      <!-- SRAA Objectives & Scope -->
       <div class="form-group">
-        <label for="sraaObjectives">SRAA Objectives (Extracted Strictly from Section 3 Verbatim)</label>
+        <label for="sraaObjectives">SRAA Objectives (Section 3)</label>
         <textarea id="sraaObjectives" name="SRAA_OBJECTIVES"></textarea>
       </div>
 
-      <div class="form-group" id="piaaObjectivesGroup">
-        <label for="piaaObjectives">Extracted PIAA Objectives</label>
-        <textarea id="piaaObjectives" name="PIAA_OBJECTIVES"></textarea>
+      <div class="form-group">
+        <label for="sraaScope">SRAA Scope of Service (Section 1)</label>
+        <textarea id="sraaScope" name="SRAA_SCOPE"></textarea>
       </div>
 
-      <div class="form-group">
-        <label for="sraaScope">Extracted SRAA Scope of Service</label>
-        <textarea id="sraaScope" name="SRAA_SCOPE"></textarea>
+      <!-- PIA Objectives & Scope (Toggled via HAS_PIA) -->
+      <div id="piaSection">
+        <div class="form-group" id="piaaObjectivesGroup">
+          <label for="piaaObjectives">PIA Objectives (Section 3)</label>
+          <textarea id="piaaObjectives" name="PIAA_OBJECTIVES"></textarea>
+        </div>
+
+        <div class="form-group" id="piaScopeGroup">
+          <label for="piaScope">PIA Scope of Service (Section 1)</label>
+          <textarea id="piaScope" name="PIA_SCOPE"></textarea>
+        </div>
       </div>
 
       <button type="submit" id="submitBtn" class="btn">Generate & Download Project Plan</button>
@@ -221,7 +229,7 @@
   const systemNameInput = document.getElementById('systemName');
   const systemAbbrInput = document.getElementById('systemAbbr');
   const hasPiaCheckbox = document.getElementById('hasPia');
-  const piaaObjectivesGroup = document.getElementById('piaaObjectivesGroup');
+  const piaSection = document.getElementById('piaSection');
 
   window.addEventListener('DOMContentLoaded', async () => {
     if (typeof window.loadRepositoryTemplate !== 'function') {
@@ -259,7 +267,7 @@
   });
 
   hasPiaCheckbox.addEventListener('change', () => {
-    piaaObjectivesGroup.style.display = hasPiaCheckbox.checked ? 'block' : 'none';
+    piaSection.style.display = hasPiaCheckbox.checked ? 'block' : 'none';
   });
 
   async function handleFileSelect() {
@@ -293,11 +301,12 @@
     document.getElementById('completionDate').value = data.TENTATIVE_COMPLETION_DATE || '';
     
     hasPiaCheckbox.checked = Boolean(data.HAS_PIA);
-    piaaObjectivesGroup.style.display = data.HAS_PIA ? 'block' : 'none';
+    piaSection.style.display = data.HAS_PIA ? 'block' : 'none';
 
     document.getElementById('sraaObjectives').value = data.SRAA_OBJECTIVES || '';
     document.getElementById('piaaObjectives').value = data.PIAA_OBJECTIVES || '';
     document.getElementById('sraaScope').value = data.SRAA_SCOPE || '';
+    document.getElementById('piaScope').value = data.PIA_SCOPE || '';
 
     systemSelect.innerHTML = '<option value="">-- Select a detected system from document --</option>';
     if (data.DETECTED_SYSTEMS && data.DETECTED_SYSTEMS.length > 0) {
@@ -335,7 +344,8 @@
         HAS_PIA: hasPiaCheckbox.checked,
         SRAA_OBJECTIVES: document.getElementById('sraaObjectives').value,
         PIAA_OBJECTIVES: document.getElementById('piaaObjectives').value,
-        SRAA_SCOPE: document.getElementById('sraaScope').value
+        SRAA_SCOPE: document.getElementById('sraaScope').value,
+        PIA_SCOPE: document.getElementById('piaScope').value
       };
 
       await window.generateAndDownloadDocx(formData, fileInput.files[0].name);
