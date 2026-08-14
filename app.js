@@ -44,15 +44,15 @@ async function extractWabDataFromFile(file) {
 
   // 1. Department / Testee Name & Abbreviation
   const deptMatch = text.match(/(?:Department|Bureau|Office)\s+of\s+[A-Za-z\s]+|Food and Environmental Hygiene Department|Education Bureau|Department of Health/i);
-  const deptName = deptMatch ? deptMatch[0].trim() : "Government Department";
+  const deptName = deptMatch ? deptMatch[0].trim() : "";
 
   const abbrMatch = text.match(/\((FEHD|DH|EDB|DPO|HKPF)\)/i) || text.match(/([A-Z]{2,6})\s+Work Assignment/);
-  const deptAbbr = abbrMatch ? abbrMatch[1].toUpperCase() : (deptName.match(/\b([A-Z])/g) || []).join('');
+  const deptAbbr = abbrMatch ? abbrMatch[1].toUpperCase() : (deptName ? (deptName.match(/\b([A-Z])/g) || []).join('') : "");
 
   // 2. Systems Detection
   const detectedSystems = extractSystemsFromText(text);
-  const primarySystem = detectedSystems.length > 0 ? detectedSystems[0].name : "Information System";
-  const primaryAbbr = detectedSystems.length > 0 ? detectedSystems[0].abbr : "IS";
+  const primarySystem = detectedSystems.length > 0 ? detectedSystems[0].name : "";
+  const primaryAbbr = detectedSystems.length > 0 ? detectedSystems[0].abbr : "";
 
   // 3. Privacy Scope (HAS_PIA)
   const hasPia = /Privacy Impact Assessment|PIA|Privacy Compliance Audit|PCA/i.test(text) &&
@@ -60,13 +60,13 @@ async function extractWabDataFromFile(file) {
 
   // 4. Dates
   const dates = text.match(/\b(?:\d{1,2}\s+)?(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\b/gi) || [];
-  const completionDate = dates.length > 0 ? dates[dates.length - 1] : "October 2026";
-  const startDate = dates.length > 1 ? dates[0] : "July 2026";
+  const completionDate = dates.length > 0 ? dates[dates.length - 1] : "";
+  const startDate = dates.length > 1 ? dates[0] : "";
 
-  // 5. Dynamic Scope & Objectives Extraction directly from WAB
-  const extractedSraaObjectives = extractSraaObjectives(text, primarySystem);
-  const extractedPiaaObjectives = hasPia ? extractPiaaObjectives(text, primarySystem) : "";
-  const extractedSraaScope = extractSraaScope(text, primarySystem);
+  // 5. Dynamic Scope & Objectives Extraction directly from WAB (No generic fallbacks)
+  const extractedSraaObjectives = extractSraaObjectives(text);
+  const extractedPiaaObjectives = hasPia ? extractPiaaObjectives(text) : "";
+  const extractedSraaScope = extractSraaScope(text);
 
   return {
     DEPARTMENT_NAME: deptName,
@@ -86,8 +86,9 @@ async function extractWabDataFromFile(file) {
 /**
  * Strictly searches ONLY inside Section 3 (PROJECT OBJECTIVES) and stops before Section 4 (PROJECT REQUIREMENTS).
  * Extracts all point-form items starting with "It is to..." or "To...".
+ * Returns empty string if no matches are found.
  */
-function extractSraaObjectives(text, systemName) {
+function extractSraaObjectives(text) {
   // Isolate Section 3 strictly between "PROJECT OBJECTIVES" and Section 4 ("PROJECT REQUIREMENTS")
   const section3Match = text.match(/PROJECT OBJECTIVES([\s\S]*?)(?=PROJECT REQUIREMENTS|4\.\s*PROJECT REQUIREMENTS|$)/i) ||
                         text.match(/3\.\s*PROJECT OBJECTIVES([\s\S]*?)(?=4\.\s*|$)/i);
@@ -127,14 +128,15 @@ function extractSraaObjectives(text, systemName) {
     }
   }
 
-  // Fallback default
-  return `(a) It is to evaluate the security risks of ${systemName} and related data of the department.\n\n(b) It is to determine the level of compliance with government IT security requirements (S17, G3).\n\n(c) It is to verify after implementation of safeguards that identified risks have been mitigated or reduced to an acceptable level.`;
+  // Pure empty fallback if no matches found
+  return "";
 }
 
 /**
  * Extracts PIAA Objectives directly from WAB text.
+ * Returns empty string if no matches are found.
  */
-function extractPiaaObjectives(text, systemName) {
+function extractPiaaObjectives(text) {
   const match = text.match(/The objectives of PIA services are:[\s\S]*?(?=PROJECT REQUIREMENTS|4\.)/i) ||
                 text.match(/Privacy Impact Assessment.*?Objectives?[\s\S]*?(?=Scope|Requirements)/i);
 
@@ -144,13 +146,15 @@ function extractPiaaObjectives(text, systemName) {
       .trim();
     if (rawObj.length > 20) return rawObj;
   }
-  return `To conduct a Privacy Impact Assessment (PIA) and Privacy Compliance Audit (PCA) for ${systemName} to ensure compliance with the Personal Data (Privacy) Ordinance.`;
+
+  return "";
 }
 
 /**
  * Extracts SRAA Scope directly from WAB text.
+ * Returns empty string if no matches are found.
  */
-function extractSraaScope(text, systemName) {
+function extractSraaScope(text) {
   const match = text.match(/SCOPE OF THE SERVICES[\s\S]*?(?=BACKGROUND|PROJECT OBJECTIVES|2\.)/i) ||
                 text.match(/Scope of Service[\s\S]*?(?=Approach|Objectives)/i);
 
@@ -161,7 +165,8 @@ function extractSraaScope(text, systemName) {
       .trim();
     if (rawScope.length > 30) return rawScope;
   }
-  return `To assess the overall information security level by evaluating the security risks of ${systemName} and related data, identifying recommended safeguards to strengthen system protection.`;
+
+  return "";
 }
 
 /**
@@ -200,25 +205,25 @@ async function generateAndDownloadDocx(formData, originalFileName) {
   const currentDateStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
   const templateContext = {
-    DEPARTMENT_NAME: formData.DEPARTMENT_NAME || "Government Department",
-    DEPARTMENT_ABBR: formData.DEPARTMENT_ABBR || "GOV",
-    SYSTEM_NAME: formData.SYSTEM_NAME || "Target System",
-    SYSTEM_ABBR: formData.SYSTEM_ABBR || "TS",
+    DEPARTMENT_NAME: formData.DEPARTMENT_NAME || "",
+    DEPARTMENT_ABBR: formData.DEPARTMENT_ABBR || "",
+    SYSTEM_NAME: formData.SYSTEM_NAME || "",
+    SYSTEM_ABBR: formData.SYSTEM_ABBR || "",
     VERSION_DATE: currentDateStr,
-    TENTATIVE_COMPLETION_DATE: formData.TENTATIVE_COMPLETION_DATE || "October 2026",
+    TENTATIVE_COMPLETION_DATE: formData.TENTATIVE_COMPLETION_DATE || "",
 
     HAS_PIA: Boolean(formData.HAS_PIA),
-    SRAA_OBJECTIVES: formData.SRAA_OBJECTIVES,
-    PIAA_OBJECTIVES: formData.HAS_PIA ? formData.PIAA_OBJECTIVES : "",
-    SRAA_SCOPE: formData.SRAA_SCOPE,
+    SRAA_OBJECTIVES: formData.SRAA_OBJECTIVES || "",
+    PIAA_OBJECTIVES: formData.HAS_PIA ? (formData.PIAA_OBJECTIVES || "") : "",
+    SRAA_SCOPE: formData.SRAA_SCOPE || "",
 
-    DATE_STAGE_0: formData.DATE_START || "July 2026",
-    DATE_INTRO_MEETING: formData.DATE_START || "July 2026",
-    DATE_PROJECT_PLAN: formData.DATE_START || "July 2026",
-    DATE_CHECKLISTS: formData.TENTATIVE_COMPLETION_DATE || "October 2026",
-    DATE_SRAA_COMPLETION: formData.TENTATIVE_COMPLETION_DATE || "October 2026",
-    DATE_PRESENTATION: formData.TENTATIVE_COMPLETION_DATE || "October 2026",
-    DATE_CLOSURE: formData.TENTATIVE_COMPLETION_DATE || "October 2026"
+    DATE_STAGE_0: formData.DATE_START || "",
+    DATE_INTRO_MEETING: formData.DATE_START || "",
+    DATE_PROJECT_PLAN: formData.DATE_START || "",
+    DATE_CHECKLISTS: formData.TENTATIVE_COMPLETION_DATE || "",
+    DATE_SRAA_COMPLETION: formData.TENTATIVE_COMPLETION_DATE || "",
+    DATE_PRESENTATION: formData.TENTATIVE_COMPLETION_DATE || "",
+    DATE_CLOSURE: formData.TENTATIVE_COMPLETION_DATE || ""
   };
 
   const PizZipConstructor = window.PizZip || window.pizzip || (window.docxtemplater && window.docxtemplater.PizZip);
