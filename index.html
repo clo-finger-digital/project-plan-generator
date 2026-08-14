@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Project Plan Generator</title>
 
-  <!-- Reliable Client CDN Bundle Order -->
+  <!-- Client CDN Bundle -->
   <script src="https://unpkg.com/mammoth@1.6.0/mammoth.browser.min.js"></script>
   <script src="https://unpkg.com/pizzip@3.1.4/dist/pizzip.min.js"></script>
   <script src="https://unpkg.com/docxtemplater@3.37.11/build/docxtemplater.js"></script>
@@ -114,6 +114,7 @@
       font-size: 0.9rem;
       color: #444;
       text-align: center;
+      word-break: break-word;
     }
   </style>
 </head>
@@ -181,7 +182,7 @@
     </div>
   </form>
 
-  <div id="status">Loading repository template...</div>
+  <div id="status">Loading template from repository...</div>
 </div>
 
 <script src="./app.js"></script>
@@ -200,7 +201,7 @@
 
   window.addEventListener('DOMContentLoaded', async () => {
     if (typeof window.loadRepositoryTemplate !== 'function') {
-      statusDiv.textContent = 'Error: app.js failed to load properly. Check console for path errors.';
+      statusDiv.textContent = 'Error: app.js failed to load properly. Check script tags.';
       return;
     }
 
@@ -208,7 +209,7 @@
     if (success) {
       statusDiv.textContent = 'Repository template loaded and ready. Upload a WAB document.';
     } else {
-      statusDiv.textContent = 'Error: Could not retrieve "Project Plan template.docx" from repository.';
+      statusDiv.textContent = 'Error: Could not retrieve "Project Plan template.docx" from repository root.';
     }
   });
 
