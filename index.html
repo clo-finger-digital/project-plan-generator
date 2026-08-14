@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Project Plan Generator</title>
 
-  <!-- Load dependencies directly via CDN for GitHub Pages compatibility -->
+  <!-- Load client-side libraries via CDN for GitHub Pages compatibility -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pizzip/3.1.4/pizzip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/docxtemplater/3.37.11/docxtemplater.js"></script>
@@ -80,7 +80,7 @@
 
 <div class="container">
   <h1>Project Plan Generator</h1>
-  <p>Upload a Work Assignment Brief (<strong>.docx</strong>) to automatically extract requirements and populate the repository's <code>Project Plan template.docx</code>.</p>
+  <p>Upload a Work Assignment Brief (<strong>.docx</strong>) to extract requirements and populate the repository's <code>Project Plan template.docx</code>.</p>
   
   <form id="uploadForm">
     <div class="drop-zone" id="dropZone">
@@ -91,31 +91,27 @@
     <button type="submit" id="submitBtn" class="btn" disabled>Generate Project Plan</button>
   </form>
 
-  <div id="status">Checking repository template file...</div>
+  <div id="status">Loading template from repository...</div>
 </div>
 
-<script>
-  let templateArrayBuffer = null;
-  const TEMPLATE_FILE_NAME = "Project Plan template.docx";
+<!-- Main Application Engine -->
+<script src="./app.js"></script>
 
+<script>
   const dropZone = document.getElementById('dropZone');
   const fileInput = document.getElementById('wabFileInput');
   const dropZoneText = document.getElementById('dropZoneText');
   const submitBtn = document.getElementById('submitBtn');
   const statusDiv = document.getElementById('status');
 
-  // Load the project plan template directly from the GitHub Pages repository on startup
+  // Load template from GitHub repository on page load
   window.addEventListener('DOMContentLoaded', async () => {
-    try {
-      const response = await fetch(`./${TEMPLATE_FILE_NAME}`);
-      if (!response.ok) {
-        throw new Error(`Failed to load "${TEMPLATE_FILE_NAME}" from repository.`);
-      }
-      templateArrayBuffer = await response.arrayBuffer();
-      statusDiv.textContent = `Repository template "${TEMPLATE_FILE_NAME}" loaded successfully and ready.`;
-    } catch (err) {
-      console.error(err);
-      statusDiv.textContent = `Error: Could not fetch "${TEMPLATE_FILE_NAME}" from repository. Ensure it exists in the repo root.`;
+    const success = await loadRepositoryTemplate();
+    if (success) {
+      statusDiv.textContent = `Repository template "${TEMPLATE_FILE_NAME}" loaded and ready.`;
+      if (fileInput.files.length > 0) submitBtn.disabled = false;
+    } else {
+      statusDiv.textContent = `Error: Could not load "${TEMPLATE_FILE_NAME}" from repository root.`;
     }
   });
 
@@ -124,7 +120,7 @@
   fileInput.addEventListener('change', (e) => {
     if (e.target.files.length > 0) {
       dropZoneText.textContent = `Selected: ${e.target.files[0].name}`;
-      if (templateArrayBuffer) submitBtn.disabled = false;
+      if (repositoryTemplateBuffer) submitBtn.disabled = false;
     }
   });
 
@@ -143,127 +139,24 @@
     if (e.dataTransfer.files.length > 0) {
       fileInput.files = e.dataTransfer.files;
       dropZoneText.textContent = `Selected: ${e.dataTransfer.files[0].name}`;
-      if (templateArrayBuffer) submitBtn.disabled = false;
+      if (repositoryTemplateBuffer) submitBtn.disabled = false;
     }
   });
 
-  /**
-   * Client-side dynamic extraction logic
-   */
-  function extractDynamicWabData(text) {
-    // 1. Department Extraction
-    const deptMatch = text.match(/(?:Department|Bureau|Office)\s+of\s+[A-Za-z\s]+|Food and Environmental Hygiene Department|Education Bureau|Department of Health/i);
-    const deptName = deptMatch ? deptMatch[0].trim() : "Government Department";
-
-    const abbrMatch = text.match(/\((FEHD|DH|EDB|DPO|HKPF)\)/i) || text.match(/([A-Z]{2,6})\s+Work Assignment/);
-    const deptAbbr = abbrMatch ? abbrMatch[1].toUpperCase() : (deptName.match(/\b([A-Z])/g) || []).join('');
-
-    // 2. System Name & Abbreviation
-    let systemName = "Information System";
-    let systemAbbr = "IS";
-
-    const systemMatch = text.match(/(?:for|of)\s+(?:the\s+)?([A-Z0-9\s\-\/,\(\)]+?\b(?:System|Platform|Service|Enhancement|Website)\b)/i);
-    if (systemMatch) {
-      systemName = systemMatch[1].replace(/\s+/g, ' ').trim();
-      const abbrInSys = systemName.match(/\(([^)]+)\)/);
-      systemAbbr = abbrInSys ? abbrInSys[1] : (systemName.match(/\b([A-Z0-9])/g) || []).join('');
-    }
-
-    // 3. Dynamic PIA Scope Detection (HAS_PIA)
-    const hasPia = /Privacy Impact Assessment|PIA|Privacy Compliance Audit|PCA/i.test(text) &&
-                   !/PIA\s+(?:is\s+)?not\s+required|No\s+PIA/i.test(text);
-
-    // 4. Dynamic Schedule Dates
-    const dates = text.match(/\b(?:\d{1,2}\s+)?(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\b/gi) || [];
-    const currentDateStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-    const completionDate = dates.length > 0 ? dates[dates.length - 1] : "October 2026";
-    const startDate = dates.length > 1 ? dates[0] : "July 2026";
-
-    // 5. Scope & Objectives Text
-    const sraaObjMatch = text.match(/Objectives?[\s\S]*?(?=Scope|2\.|3\.)/i);
-    const sraaScopeMatch = text.match(/Scope\s+of\s+Service[\s\S]*?(?=Approach|3\.|4\.)/i);
-
-    const sraaObjectives = sraaObjMatch 
-      ? sraaObjMatch[0].replace(/Objectives?/i, '').trim().slice(0, 500) 
-      : `To perform a comprehensive Security Risk Assessment and Audit (SRAA) for ${systemName} in accordance with baseline security requirements.`;
-
-    const sraaScope = sraaScopeMatch 
-      ? sraaScopeMatch[0].replace(/Scope\s+of\s+Service/i, '').trim().slice(0, 600) 
-      : `The scope covers security risk assessment, general control reviews, technical vulnerability scanning, and penetration testing for ${systemName}.`;
-
-    return {
-      DEPARTMENT_NAME: deptName,
-      DEPARTMENT_ABBR: deptAbbr,
-      SYSTEM_NAME: systemName,
-      SYSTEM_ABBR: systemAbbr,
-      VERSION_DATE: currentDateStr,
-      TENTATIVE_COMPLETION_DATE: completionDate,
-
-      HAS_PIA: hasPia,
-      SRAA_OBJECTIVES: sraaObjectives,
-      PIAA_OBJECTIVES: hasPia ? `To conduct a Privacy Impact Assessment (PIA) and Privacy Compliance Audit (PCA) for ${systemName} to ensure compliance with the Personal Data (Privacy) Ordinance.` : "",
-      SRAA_SCOPE: sraaScope,
-
-      DATE_STAGE_0: startDate,
-      DATE_INTRO_MEETING: startDate,
-      DATE_PROJECT_PLAN: startDate,
-      DATE_CHECKLISTS: completionDate,
-      DATE_SRAA_COMPLETION: completionDate,
-      DATE_PRESENTATION: completionDate,
-      DATE_CLOSURE: completionDate
-    };
-  }
-
   document.getElementById('uploadForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const uploadedFile = fileInput.files[0];
-    if (!uploadedFile || !templateArrayBuffer) return;
+    const file = fileInput.files[0];
+    if (!file) return;
 
-    statusDiv.textContent = 'Parsing uploaded WAB document...';
+    statusDiv.textContent = 'Parsing WAB document and rendering template...';
     submitBtn.disabled = true;
 
     try {
-      // 1. Read uploaded DOCX file in browser as ArrayBuffer
-      const wabBuffer = await uploadedFile.arrayBuffer();
-
-      // 2. Extract plain text with mammoth in browser
-      const mammothResult = await mammoth.extractRawText({ arrayBuffer: wabBuffer });
-      const rawText = mammothResult.value;
-
-      // 3. Extract parameters dynamically
-      const templateData = extractDynamicWabData(rawText);
-
-      statusDiv.textContent = 'Rendering project plan template...';
-
-      // 4. Load repository template into PizZip & docxtemplater
-      const zip = new PizZip(templateArrayBuffer);
-      const doc = new window.docxtemplater(zip, {
-        paragraphLoop: true,
-        linebreaks: true,
-      });
-
-      // Render placeholders
-      doc.render(templateData);
-
-      // 5. Generate output binary blob & trigger browser download
-      const outBlob = doc.getZip().generate({
-        type: 'blob',
-        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      });
-
-      const downloadUrl = URL.createObjectURL(outBlob);
-      const a = document.createElement('a');
-      a.href = downloadUrl;
-      a.download = `Generated_Project_Plan_${uploadedFile.name}`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(downloadUrl);
-
+      await processUploadedWab(file);
       statusDiv.textContent = 'Project plan generated and downloaded successfully!';
     } catch (err) {
       console.error(err);
-      statusDiv.textContent = 'Error processing document. Please check console for details.';
+      statusDiv.textContent = `Error: ${err.message}`;
     } finally {
       submitBtn.disabled = false;
     }
