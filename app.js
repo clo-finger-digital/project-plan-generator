@@ -84,50 +84,43 @@ async function extractWabDataFromFile(file) {
 }
 
 /**
- * Strictly searches ONLY inside Section 3 (PROJECT OBJECTIVES) and stops before Section 4 (PROJECT REQUIREMENTS).
- * Copies ALL paragraphs/items starting with "It is to..." verbatim in lettered point form.
+ * Robustly extracts ALL items starting with "It is to" verbatim inside Section 3 (PROJECT OBJECTIVES).
+ * Stops strictly before Section 4 (PROJECT REQUIREMENTS).
  */
 function extractSraaObjectives(text) {
-  // Isolate Section 3 strictly between "PROJECT OBJECTIVES" and Section 4 ("PROJECT REQUIREMENTS")
-  const section3Match = text.match(/PROJECT OBJECTIVES([\s\S]*?)(?=PROJECT REQUIREMENTS|4\.\s*PROJECT REQUIREMENTS|$)/i) ||
-                        text.match(/3\.\s*PROJECT OBJECTIVES([\s\S]*?)(?=4\.\s*|$)/i);
+  // Isolate Section 3 between "PROJECT OBJECTIVES" and Section 4 ("PROJECT REQUIREMENTS")
+  const section3Match = text.match(/PROJECT OBJECTIVES[\s\S]*?(?=PROJECT REQUIREMENTS|4\.\s*PROJECT REQUIREMENTS|$)/i);
 
-  if (section3Match && section3Match[1]) {
-    const rawObjectivesText = section3Match[1].trim();
+  if (!section3Match) return "";
 
-    // Match paragraphs or items starting with "It is to" verbatim
-    const matches = [];
-    const paragraphs = rawObjectivesText.split(/\n+/);
+  const rawSectionText = section3Match[0];
 
-    for (let para of paragraphs) {
-      let cleanPara = para.trim();
-      // Remove leading bullet/lettering like "(a)", "1.", "-", etc.
-      cleanPara = cleanPara.replace(/^(?:\([a-z0-9]+\)|\d+\.|[•\-\*])\s*/i, '');
+  // Split section text using boundary matching on "It is to"
+  const matches = [];
+  const parts = rawSectionText.split(/\b(?=It is to\b)/i);
 
-      if (/^it is to/i.test(cleanPara)) {
-        matches.push(cleanPara);
+  for (let part of parts) {
+    let cleanPart = part.replace(/\s+/g, ' ').trim();
+
+    // Clean leading bullets or numbers if present
+    cleanPart = cleanPart.replace(/^(?:\([a-z0-9]+\)|\d+\.|[•\-\*])\s*/i, '');
+
+    if (/^It is to\b/i.test(cleanPart)) {
+      // Remove trailing section headers or non-objective artifacts if captured at the end
+      cleanPart = cleanPart.replace(/PROJECT REQUIREMENTS.*$/i, '').trim();
+
+      if (cleanPart.length > 15 && !matches.includes(cleanPart)) {
+        matches.push(cleanPart);
       }
     }
+  }
 
-    // Fallback regex match if text wasn't separated by newlines
-    if (matches.length === 0) {
-      const regex = /(It is to[\s\S]*?)(?=(?:It is to|PROJECT REQUIREMENTS|4\.\s*|$))/gi;
-      let m;
-      while ((m = regex.exec(rawObjectivesText)) !== null) {
-        let cleanItem = m[1].replace(/\s+/g, ' ').trim();
-        if (cleanItem.length > 10) {
-          matches.push(cleanItem);
-        }
-      }
-    }
-
-    if (matches.length > 0) {
-      // Return point form verbatim with letter indexing: (a) It is to... \n\n (b) It is to...
-      return matches.map((item, index) => {
-        const letter = String.fromCharCode(97 + index); // 'a', 'b', 'c'...
-        return `(${letter}) ${item}`;
-      }).join('\n\n');
-    }
+  if (matches.length > 0) {
+    // Format into lettered point form verbatim: (a) It is to... \n\n (b) It is to...
+    return matches.map((item, index) => {
+      const letter = String.fromCharCode(97 + index); // 'a', 'b', 'c'...
+      return `(${letter}) ${item}`;
+    }).join('\n\n');
   }
 
   return "";
