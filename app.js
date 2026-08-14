@@ -150,31 +150,38 @@ function extractPiaaObjectives(text) {
  * Extracts SRAA Scope directly from SCOPE OF THE SERVICES in WAB verbatim.
  * Handles Table of Contents duplication and removes admin boilerplate.
  */
+/**
+ * Robustly extracts ALL bullet items verbatim from Section 1 (SCOPE OF THE SERVICES).
+ * Bypasses Table of Contents entries and retains all scope items.
+ */
 function extractSraaScope(text) {
   if (!text) return "";
 
-  // Locate the section 1 body heading (skips TOC entries that terminate quickly)
-  const matches = [...text.matchAll(/SCOPE OF THE SERVICES([\s\S]*?)(?=(?:BACKGROUND|PROJECT OBJECTIVES|3\.\s*PROJECT OBJECTIVES|2\.\s*BACKGROUND|$))/gi)];
+  // Capture Section 1 text body between "SCOPE OF THE SERVICES" and "BACKGROUND"
+  const matches = [...text.matchAll(/SCOPE OF THE SERVICES([\s\S]*?)(?=(?:\bBACKGROUND\b|2\.\s*BACKGROUND|\bPROJECT OBJECTIVES\b|$))/gi)];
 
-  if (matches.length > 0) {
-    let rawScope = matches[matches.length - 1][0];
+  if (matches.length === 0) return "";
 
-    // Strip section headers and administrative intro sentences
-    rawScope = rawScope
-      .replace(/^SCOPE OF THE SERVICES/i, '')
-      .replace(/^Scope of Service/i, '')
-      .replace(/As a SOA Contractor in Category B[\s\S]*?invited to provide the following services.*?:/i, '')
-      .trim();
+  // Select the body match (skipping Table of Contents entries)
+  let rawScopeText = matches[matches.length - 1][1];
 
-    // Clean trailing boilerplate contract clauses if captured
-    rawScope = rawScope.replace(/Unless otherwise defined in this Brief[\s\S]*$/i, '').trim();
-    rawScope = rawScope.replace(/This work assignment is fixed cost project[\s\S]*$/i, '').trim();
-    rawScope = rawScope.replace(/The total price quoted in Price Proposal[\s\S]*$/i, '').trim();
+  // Remove the administrative invitation intro paragraph if present
+  rawScopeText = rawScopeText.replace(/As a SOA Contractor in Category B[\s\S]*?invited to provide the following services.*?:/i, '');
 
-    if (rawScope.length > 20) {
-      return rawScope;
-    }
-  }
+  // Strip trailing SOA terms and price boilerplates if present at the end of Section 1
+  rawScopeText = rawScopeText.replace(/Unless otherwise defined in this Brief[\s\S]*$/i, '');
+  rawScopeText = rawScopeText.replace(/This work assignment is fixed cost project[\s\S]*$/i, '');
+  rawScopeText = rawScopeText.replace(/The total price quoted in Price Proposal[\s\S]*$/i, '');
+
+  // Clean extra blank space while preserving item lines
+  const cleanScope = rawScopeText
+    .split(/\n+/)
+    .map(line => line.trim())
+    .filter(line => line.length > 0)
+    .join('\n\n');
+
+  return cleanScope;
+}
 
   return "";
 }
