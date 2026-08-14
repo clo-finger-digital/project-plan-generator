@@ -64,9 +64,8 @@ async function extractWabDataFromFile(file) {
   const startDate = dates.length > 1 ? dates[0] : "";
 
   // 5. Dynamic Scope & Objectives Extraction directly from WAB
-  const extractedSraaObjectives = extractSraaObjectives(text);
-  const extractedPiaaObjectives = hasPia ? extractPiaaObjectives(text) : "";
-  const extractedSraaScope = extractSraaScope(text);
+  const extractedScopes = extractScopeOfServices(text);
+  const extractedObjectives = extractProjectObjectives(text);
 
   return {
     DEPARTMENT_NAME: deptName,
@@ -77,20 +76,20 @@ async function extractWabDataFromFile(file) {
     HAS_PIA: hasPia,
     DATE_START: startDate,
     TENTATIVE_COMPLETION_DATE: completionDate,
-    SRAA_OBJECTIVES: extractedSraaObjectives,
-    PIAA_OBJECTIVES: extractedPiaaObjectives,
-    SRAA_SCOPE: extractedSraaScope
+    SRAA_OBJECTIVES: extractedObjectives.sraaObjectives,
+    PIAA_OBJECTIVES: hasPia ? extractedObjectives.piaaObjectives : "",
+    SRAA_SCOPE: extractedScopes.sraaScope,
+    PIA_SCOPE: hasPia ? extractedScopes.piaScope : ""
   };
 }
 
 /**
- * Robustly extracts ALL items verbatim from Section 1 (SCOPE OF THE SERVICES).
- * Strictly targets Section 1 body while bypassing TOC entries and Annex references.
+ * Robustly extracts Section 1 (SCOPE OF THE SERVICES) and separates SRAA Scope and PIA Scope.
  */
-function extractSraaScope(text) {
-  if (!text) return "";
+function extractScopeOfServices(text) {
+  if (!text) return { sraaScope: "", piaScope: "" };
 
-  // Find all matches for SCOPE OF THE SERVICES up to BACKGROUND
+  // Isolate Section 1 body by finding the longest match between "SCOPE OF THE SERVICES" and "BACKGROUND"
   const scopeRegex = /SCOPE OF THE SERVICES([\s\S]*?)(?=\n\s*BACKGROUND\b|\n\s*2\.\s*BACKGROUND)/gi;
   let matches = [];
   let m;
@@ -99,36 +98,52 @@ function extractSraaScope(text) {
     matches.push(m[1]);
   }
 
-  if (matches.length === 0) return "";
+  if (matches.length === 0) return { sraaScope: "", piaScope: "" };
 
-  // Pick the match with the longest content (to ignore Table of Contents entries)
   let rawScope = matches.reduce((a, b) => (a.length > b.length ? a : b), "");
 
-  // Strip administrative introduction
+  // Strip intro invitation text and tailing boilerplates
   rawScope = rawScope.replace(/^[\s\S]*?invited to provide the following services.*?:/i, '');
-
-  // Remove trailing financial / contractual boilerplates at the end of Section 1
+  rawScope = rawScope.replace(/The scope of the services shall cover the security areas[\s\S]*$/i, '');
   rawScope = rawScope.replace(/Unless otherwise defined in this Brief[\s\S]*$/i, '');
-  rawScope = rawScope.replace(/This work assignment is fixed cost project[\s\S]*$/i, '');
-  rawScope = rawScope.replace(/The total price quoted in Price Proposal[\s\S]*$/i, '');
 
-  // Format into clean double-spaced paragraphs
-  const cleanLines = rawScope
-    .split(/\n+/)
-    .map(line => line.trim())
-    .filter(line => line.length > 0 && !line.startsWith('TABLE OF CONTENTS'));
+  let sraaText = "";
+  let piaText = "";
 
-  return cleanLines.join('\n\n');
+  // Check if Section 1 contains sub-headers for SRAA and PIA
+  const hasSubHeaders = /Security Risk Assessment and Audit|SRAA/i.test(rawScope) && /Privacy Impact Assessment|PIA/i.test(rawScope);
+
+  if (hasSubHeaders) {
+    const sraaMatch = rawScope.match(/(?:Security Risk Assessment and Audit|\(SRAA\))([\s\S]*?)(?=(?:Privacy Impact Assessment|\(PIA\)|$))/i);
+    const piaMatch = rawScope.match(/(?:Privacy Impact Assessment|\(PIA\))([\s\S]*$)/i);
+
+    if (sraaMatch) sraaText = sraaMatch[1].trim();
+    if (piaMatch) piaText = piaMatch[1].trim();
+  } else {
+    // If no distinct sub-headers exist, allocate all items to SRAA Scope
+    sraaText = rawScope.trim();
+  }
+
+  const cleanLines = (str) => {
+    return str
+      .split(/\n+/)
+      .map(line => line.trim())
+      .filter(line => line.length > 0 && !line.startsWith('TABLE OF CONTENTS'))
+      .join('\n\n');
+  };
+
+  return {
+    sraaScope: cleanLines(sraaText),
+    piaScope: cleanLines(piaText)
+  };
 }
 
 /**
- * Robustly extracts ALL items starting with "It is to..." verbatim inside Section 3 (PROJECT OBJECTIVES).
- * Formats every bullet point as: (a) It is to... (b) It is to...
+ * Robustly extracts Section 3 (PROJECT OBJECTIVES) and separates SRAA and PIA objectives.
  */
-function extractSraaObjectives(text) {
-  if (!text) return "";
+function extractProjectObjectives(text) {
+  if (!text) return { sraaObjectives: "", piaaObjectives: "" };
 
-  // Isolate Section 3 content specifically between "PROJECT OBJECTIVES" and "PROJECT REQUIREMENTS"
   const objRegex = /PROJECT OBJECTIVES([\s\S]*?)(?=\n\s*PROJECT REQUIREMENTS|\n\s*4\.\s*PROJECT REQUIREMENTS)/gi;
   let matches = [];
   let m;
@@ -137,53 +152,52 @@ function extractSraaObjectives(text) {
     matches.push(m[1]);
   }
 
-  if (matches.length === 0) return "";
+  if (matches.length === 0) return { sraaObjectives: "", piaaObjectives: "" };
 
-  // Choose the actual content block (longest match, bypassing TOC)
   const rawSectionText = matches.reduce((a, b) => (a.length > b.length ? a : b), "");
 
-  // Split on "It is to" boundary
-  const items = [];
-  const parts = rawSectionText.split(/\b(?=It is to\b)/i);
+  let sraaRaw = rawSectionText;
+  let piaaRaw = "";
 
-  for (let part of parts) {
-    let cleanPart = part.replace(/\s+/g, ' ').trim();
-    cleanPart = cleanPart.replace(/^(?:\([a-z0-9]+\)|\d+\.|[•\-\*])\s*/i, '');
+  // Check for categorized objective headers
+  if (/objectives of SRAA services|objectives of PIA services/i.test(rawSectionText)) {
+    const sraaMatch = rawSectionText.match(/objectives of SRAA services are:([\s\S]*?)(?=objectives of PIA services|$)/i);
+    const piaaMatch = rawSectionText.match(/objectives of PIA services are:([\s\S]*$)/i);
 
-    if (/^It is to\b/i.test(cleanPart)) {
-      if (cleanPart.length > 15 && !items.includes(cleanPart)) {
-        items.push(cleanPart);
-      }
-    }
+    if (sraaMatch) sraaRaw = sraaMatch[1];
+    if (piaaMatch) piaaRaw = piaaMatch[1];
   }
 
-  if (items.length > 0) {
+  const formatObjectives = (rawStr) => {
+    if (!rawStr) return "";
+    const items = [];
+    const lines = rawStr.split(/\n+/);
+
+    for (let line of lines) {
+      let cleanPart = line.replace(/\s+/g, ' ').trim();
+      cleanPart = cleanPart.replace(/^(?:\([a-z0-9]+\)|\d+\.|[•\-\*;\-,])\s*/i, '');
+
+      if (cleanPart.length > 10) {
+        // Guarantee "It is to" prefix format
+        if (!/^It is to\b/i.test(cleanPart)) {
+          cleanPart = `It is to ${cleanPart.charAt(0).toLowerCase() + cleanPart.slice(1)}`;
+        }
+        if (!items.includes(cleanPart)) {
+          items.push(cleanPart);
+        }
+      }
+    }
+
     return items.map((item, index) => {
       const letter = String.fromCharCode(97 + index);
       return `(${letter}) ${item}`;
     }).join('\n\n');
-  }
+  };
 
-  return "";
-}
-
-/**
- * Extracts PIAA Objectives directly from WAB text.
- */
-function extractPiaaObjectives(text) {
-  if (!text) return "";
-
-  const match = text.match(/The objectives of PIA services are:[\s\S]*?(?=PROJECT REQUIREMENTS|4\.)/i) ||
-                text.match(/Privacy Impact Assessment.*?Objectives?[\s\S]*?(?=Scope|Requirements)/i);
-
-  if (match) {
-    let rawObj = match[0]
-      .replace(/The objectives of PIA services are:/i, '')
-      .trim();
-    if (rawObj.length > 20) return rawObj;
-  }
-
-  return "";
+  return {
+    sraaObjectives: formatObjectives(sraaRaw),
+    piaaObjectives: formatObjectives(piaaRaw)
+  };
 }
 
 /**
@@ -233,6 +247,7 @@ async function generateAndDownloadDocx(formData, originalFileName) {
     SRAA_OBJECTIVES: formData.SRAA_OBJECTIVES || "",
     PIAA_OBJECTIVES: formData.HAS_PIA ? (formData.PIAA_OBJECTIVES || "") : "",
     SRAA_SCOPE: formData.SRAA_SCOPE || "",
+    PIA_SCOPE: formData.HAS_PIA ? (formData.PIA_SCOPE || "") : "",
 
     DATE_STAGE_0: formData.DATE_START || "",
     DATE_INTRO_MEETING: formData.DATE_START || "",
