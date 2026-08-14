@@ -19,7 +19,7 @@
       color: #333;
     }
     .container {
-      max-width: 700px;
+      max-width: 750px;
       margin: 0 auto;
       background: #ffffff;
       padding: 30px;
@@ -68,13 +68,18 @@
       margin-bottom: 5px;
       color: #444;
     }
-    .form-group input, .form-group select {
+    .form-group input, .form-group select, .form-group textarea {
       width: 100%;
       padding: 8px 12px;
       border: 1px solid #ccc;
       border-radius: 4px;
       box-sizing: border-box;
       font-size: 0.95rem;
+    }
+    .form-group textarea {
+      resize: vertical;
+      min-height: 90px;
+      font-family: inherit;
     }
     .form-row {
       display: flex;
@@ -178,6 +183,22 @@
         <label for="hasPia">Includes Privacy Impact Assessment (PIA)</label>
       </div>
 
+      <!-- Scope & Objectives Dynamic Textboxes -->
+      <div class="form-group">
+        <label for="sraaObjectives">Extracted SRAA Objectives</label>
+        <textarea id="sraaObjectives" name="SRAA_OBJECTIVES"></textarea>
+      </div>
+
+      <div class="form-group" id="piaaObjectivesGroup">
+        <label for="piaaObjectives">Extracted PIAA Objectives</label>
+        <textarea id="piaaObjectives" name="PIAA_OBJECTIVES"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="sraaScope">Extracted SRAA Scope of Service</label>
+        <textarea id="sraaScope" name="SRAA_SCOPE"></textarea>
+      </div>
+
       <button type="submit" id="submitBtn" class="btn">Generate & Download Project Plan</button>
     </div>
   </form>
@@ -198,10 +219,12 @@
   const systemSelect = document.getElementById('systemSelect');
   const systemNameInput = document.getElementById('systemName');
   const systemAbbrInput = document.getElementById('systemAbbr');
+  const hasPiaCheckbox = document.getElementById('hasPia');
+  const piaaObjectivesGroup = document.getElementById('piaaObjectivesGroup');
 
   window.addEventListener('DOMContentLoaded', async () => {
     if (typeof window.loadRepositoryTemplate !== 'function') {
-      statusDiv.textContent = 'Error: app.js failed to load properly. Check script tags.';
+      statusDiv.textContent = 'Error: app.js failed to load properly.';
       return;
     }
 
@@ -234,6 +257,10 @@
     }
   });
 
+  hasPiaCheckbox.addEventListener('change', () => {
+    piaaObjectivesGroup.style.display = hasPiaCheckbox.checked ? 'block' : 'none';
+  });
+
   async function handleFileSelect() {
     const file = fileInput.files[0];
     if (!file) return;
@@ -263,7 +290,13 @@
     document.getElementById('systemAbbr').value = data.SYSTEM_ABBR || '';
     document.getElementById('startDate').value = data.DATE_START || '';
     document.getElementById('completionDate').value = data.TENTATIVE_COMPLETION_DATE || '';
-    document.getElementById('hasPia').checked = Boolean(data.HAS_PIA);
+    
+    hasPiaCheckbox.checked = Boolean(data.HAS_PIA);
+    piaaObjectivesGroup.style.display = data.HAS_PIA ? 'block' : 'none';
+
+    document.getElementById('sraaObjectives').value = data.SRAA_OBJECTIVES || '';
+    document.getElementById('piaaObjectives').value = data.PIAA_OBJECTIVES || '';
+    document.getElementById('sraaScope').value = data.SRAA_SCOPE || '';
 
     systemSelect.innerHTML = '<option value="">-- Select a detected system from document --</option>';
     if (data.DETECTED_SYSTEMS && data.DETECTED_SYSTEMS.length > 0) {
@@ -298,7 +331,10 @@
         SYSTEM_ABBR: document.getElementById('systemAbbr').value,
         DATE_START: document.getElementById('startDate').value,
         TENTATIVE_COMPLETION_DATE: document.getElementById('completionDate').value,
-        HAS_PIA: document.getElementById('hasPia').checked
+        HAS_PIA: hasPiaCheckbox.checked,
+        SRAA_OBJECTIVES: document.getElementById('sraaObjectives').value,
+        PIAA_OBJECTIVES: document.getElementById('piaaObjectives').value,
+        SRAA_SCOPE: document.getElementById('sraaScope').value
       };
 
       await window.generateAndDownloadDocx(formData, fileInput.files[0].name);
