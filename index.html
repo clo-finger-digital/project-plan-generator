@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Project Plan Generator</title>
 
-  <!-- Load CDN dependencies in this order -->
+  <!-- Load dependencies via CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pizzip/3.1.4/pizzip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/docxtemplater/3.37.11/docxtemplater.js"></script>
@@ -181,10 +181,10 @@
     </div>
   </form>
 
-  <div id="status">Loading repository template...</div>
+  <div id="status">Loading template...</div>
 </div>
 
-<!-- Load application script -->
+<!-- MUST load app.js BEFORE DOMContentLoaded event logic -->
 <script src="./app.js"></script>
 
 <script>
@@ -200,12 +200,13 @@
   const systemAbbrInput = document.getElementById('systemAbbr');
 
   window.addEventListener('DOMContentLoaded', async () => {
-    if (typeof loadRepositoryTemplate !== 'function') {
-      statusDiv.textContent = 'Error: app.js failed to load properly.';
+    // Retry check in case script execution is delayed
+    if (typeof window.loadRepositoryTemplate !== 'function') {
+      statusDiv.textContent = 'Error: app.js failed to load properly. Check console for path errors.';
       return;
     }
 
-    const success = await loadRepositoryTemplate();
+    const success = await window.loadRepositoryTemplate();
     if (success) {
       statusDiv.textContent = 'Repository template loaded and ready. Upload a WAB document.';
     } else {
@@ -242,11 +243,11 @@
     statusDiv.textContent = 'Extracting metadata from document...';
 
     try {
-      if (typeof extractWabDataFromFile !== 'function') {
-        throw new Error("extractWabDataFromFile function is missing. Verify app.js is loaded.");
+      if (typeof window.extractWabDataFromFile !== 'function') {
+        throw new Error("extractWabDataFromFile is not available. Ensure app.js loaded.");
       }
 
-      const extractedData = await extractWabDataFromFile(file);
+      const extractedData = await window.extractWabDataFromFile(file);
       populateForm(extractedData);
       formSection.style.display = 'block';
       statusDiv.textContent = 'Data extracted successfully. Review or edit fields below.';
@@ -301,7 +302,7 @@
         HAS_PIA: document.getElementById('hasPia').checked
       };
 
-      await generateAndDownloadDocx(formData, fileInput.files[0].name);
+      await window.generateAndDownloadDocx(formData, fileInput.files[0].name);
       statusDiv.textContent = 'Project plan generated and downloaded successfully!';
     } catch (err) {
       console.error(err);
