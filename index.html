@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Project Plan Generator</title>
 
-  <!-- Load dependencies via CDN -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pizzip/3.1.4/pizzip.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/docxtemplater/3.37.11/docxtemplater.js"></script>
+  <!-- Reliable Client CDN Bundle Order -->
+  <script src="https://unpkg.com/mammoth@1.6.0/mammoth.browser.min.js"></script>
+  <script src="https://unpkg.com/pizzip@3.1.4/dist/pizzip.min.js"></script>
+  <script src="https://unpkg.com/docxtemplater@3.37.11/build/docxtemplater.js"></script>
 
   <style>
     body {
@@ -181,10 +181,9 @@
     </div>
   </form>
 
-  <div id="status">Loading template...</div>
+  <div id="status">Loading repository template...</div>
 </div>
 
-<!-- MUST load app.js BEFORE DOMContentLoaded event logic -->
 <script src="./app.js"></script>
 
 <script>
@@ -200,7 +199,6 @@
   const systemAbbrInput = document.getElementById('systemAbbr');
 
   window.addEventListener('DOMContentLoaded', async () => {
-    // Retry check in case script execution is delayed
     if (typeof window.loadRepositoryTemplate !== 'function') {
       statusDiv.textContent = 'Error: app.js failed to load properly. Check console for path errors.';
       return;
@@ -244,7 +242,7 @@
 
     try {
       if (typeof window.extractWabDataFromFile !== 'function') {
-        throw new Error("extractWabDataFromFile is not available. Ensure app.js loaded.");
+        throw new Error("extractWabDataFromFile is not available.");
       }
 
       const extractedData = await window.extractWabDataFromFile(file);
