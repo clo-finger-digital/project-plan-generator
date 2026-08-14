@@ -85,8 +85,7 @@ async function extractWabDataFromFile(file) {
 
 /**
  * Strictly searches ONLY inside Section 3 (PROJECT OBJECTIVES) and stops before Section 4 (PROJECT REQUIREMENTS).
- * Extracts all point-form items starting with "It is to..." or "To...".
- * Returns empty string if no matches are found.
+ * Copies ALL paragraphs/items starting with "It is to..." verbatim in lettered point form.
  */
 function extractSraaObjectives(text) {
   // Isolate Section 3 strictly between "PROJECT OBJECTIVES" and Section 4 ("PROJECT REQUIREMENTS")
@@ -96,31 +95,34 @@ function extractSraaObjectives(text) {
   if (section3Match && section3Match[1]) {
     const rawObjectivesText = section3Match[1].trim();
 
-    // Regex to split items in point form starting with "It is to..." or "To..."
-    const itemsRegex = /(?:\([a-z0-9]+\)|\d+\.|[•\-\*])?\s*((?:It is\s+)?to\s+[\s\S]*?)(?=(?:\([a-z0-9]+\)|\d+\.|[•\-\*]|\b(?:It is\s+)?to\b|$))/gi;
+    // Match paragraphs or items starting with "It is to" verbatim
     const matches = [];
-    let match;
+    const paragraphs = rawObjectivesText.split(/\n+/);
 
-    while ((match = itemsRegex.exec(rawObjectivesText)) !== null) {
-      let cleanItem = match[1].replace(/\s+/g, ' ').trim();
+    for (let para of paragraphs) {
+      let cleanPara = para.trim();
+      // Remove leading bullet/lettering like "(a)", "1.", "-", etc.
+      cleanPara = cleanPara.replace(/^(?:\([a-z0-9]+\)|\d+\.|[•\-\*])\s*/i, '');
 
-      // Normalize string so every point starts with "It is to..."
-      if (!cleanItem.toLowerCase().startsWith('it is to')) {
-        if (cleanItem.toLowerCase().startsWith('to ')) {
-          cleanItem = 'It is ' + cleanItem;
-        } else {
-          cleanItem = 'It is to ' + cleanItem;
-        }
+      if (/^it is to/i.test(cleanPara)) {
+        matches.push(cleanPara);
       }
+    }
 
-      // Ignore short trailing text fragments
-      if (cleanItem.length > 20 && !matches.includes(cleanItem)) {
-        matches.push(cleanItem);
+    // Fallback regex match if text wasn't separated by newlines
+    if (matches.length === 0) {
+      const regex = /(It is to[\s\S]*?)(?=(?:It is to|PROJECT REQUIREMENTS|4\.\s*|$))/gi;
+      let m;
+      while ((m = regex.exec(rawObjectivesText)) !== null) {
+        let cleanItem = m[1].replace(/\s+/g, ' ').trim();
+        if (cleanItem.length > 10) {
+          matches.push(cleanItem);
+        }
       }
     }
 
     if (matches.length > 0) {
-      // Return point form: (a) It is to... \n\n (b) It is to...
+      // Return point form verbatim with letter indexing: (a) It is to... \n\n (b) It is to...
       return matches.map((item, index) => {
         const letter = String.fromCharCode(97 + index); // 'a', 'b', 'c'...
         return `(${letter}) ${item}`;
@@ -128,13 +130,11 @@ function extractSraaObjectives(text) {
     }
   }
 
-  // Pure empty fallback if no matches found
   return "";
 }
 
 /**
  * Extracts PIAA Objectives directly from WAB text.
- * Returns empty string if no matches are found.
  */
 function extractPiaaObjectives(text) {
   const match = text.match(/The objectives of PIA services are:[\s\S]*?(?=PROJECT REQUIREMENTS|4\.)/i) ||
@@ -152,7 +152,6 @@ function extractPiaaObjectives(text) {
 
 /**
  * Extracts SRAA Scope directly from WAB text.
- * Returns empty string if no matches are found.
  */
 function extractSraaScope(text) {
   const match = text.match(/SCOPE OF THE SERVICES[\s\S]*?(?=BACKGROUND|PROJECT OBJECTIVES|2\.)/i) ||
