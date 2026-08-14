@@ -1,340 +1,274 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WAB Project Plan Generator Engine</title>
-    <!-- Tailwind CSS for UI styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Pyodide Core Engine for Serverless Client-Side DOCX Compilations -->
-    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Project Plan Generator</title>
+
+  <!-- Load dependencies directly via CDN for GitHub Pages compatibility -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pizzip/3.1.4/pizzip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/docxtemplater/3.37.11/docxtemplater.js"></script>
+
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f4f7f6;
+      margin: 0;
+      padding: 40px 20px;
+      color: #333;
+    }
+    .container {
+      max-width: 650px;
+      margin: 0 auto;
+      background: #ffffff;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    h1 {
+      font-size: 1.5rem;
+      margin-bottom: 8px;
+      color: #111;
+    }
+    p {
+      color: #666;
+      font-size: 0.95rem;
+      margin-bottom: 24px;
+    }
+    .drop-zone {
+      border: 2px dashed #0070f3;
+      border-radius: 6px;
+      padding: 40px 20px;
+      text-align: center;
+      background: #f0f7ff;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+    .drop-zone:hover {
+      background: #e1f0ff;
+    }
+    .file-input {
+      display: none;
+    }
+    .btn {
+      display: inline-block;
+      margin-top: 20px;
+      padding: 10px 20px;
+      background-color: #0070f3;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      font-size: 1rem;
+    }
+    .btn:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+    #status {
+      margin-top: 15px;
+      font-size: 0.9rem;
+      color: #444;
+      text-align: center;
+    }
+  </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased">
-    <div class="max-w-4xl mx-auto px-4 py-12">
-        <header class="border-b border-slate-800 pb-6 mb-8">
-            <h1 class="text-3xl font-extrabold tracking-tight text-white sm:text-4xl">WAB Project Plan Generator</h1>
-            <p class="mt-2 text-sm text-slate-400">Parses Work Assignment Briefs (WAB) directly into repository project plan templates.</p>
-        </header>
+<body>
 
-        <section class="bg-slate-800 rounded-lg p-6 border border-slate-700 shadow-xl space-y-6">
-            <h2 class="text-xl font-bold text-white mb-2">1. Upload WAB Source Document</h2>
-            
-            <div class="p-6 bg-slate-950 border border-dashed border-blue-500/50 rounded-lg text-center cursor-pointer hover:border-blue-400 transition-colors" onclick="document.getElementById('wab_file_input').click()">
-                <p id="file_label_text" class="text-sm font-semibold text-blue-400">📁 Click or Drag & Drop WAB Brief File (.docx) Here</p>
-                <input type="file" id="wab_file_input" accept=".docx" class="hidden" onchange="handleFileChange(event)">
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">System Name</label>
-                    <input type="text" id="sys_name_input" placeholder="Auto-populated from WAB..." class="w-full bg-slate-950 border border-slate-700 rounded p-2.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">System Abbreviation</label>
-                    <input type="text" id="sys_abbr_input" placeholder="Auto-populated from WAB..." class="w-full bg-slate-950 border border-slate-700 rounded p-2.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Department Name</label>
-                    <input type="text" id="dept_name_input" placeholder="Auto-populated from WAB..." class="w-full bg-slate-950 border border-slate-700 rounded p-2.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Department Abbreviation</label>
-                    <input type="text" id="dept_abbr_input" placeholder="Auto-populated from WAB..." class="w-full bg-slate-950 border border-slate-700 rounded p-2.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500">
-                </div>
-            </div>
-
-            <div class="pt-4">
-                <button id="run_pipeline_btn" onclick="executePlanPipeline()" class="w-full bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold py-3 px-4 rounded transition duration-200 shadow-lg disabled:opacity-50" disabled>
-                    Loading Pyodide WASM Engine...
-                </button>
-            </div>
-        </section>
-
-        <!-- Execution Log Output -->
-        <section class="mt-6 bg-slate-950 rounded-lg border border-slate-800 p-4 shadow-inner">
-            <span class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Execution Console Output</span>
-            <pre id="console_output" class="text-xs font-mono text-emerald-400 overflow-x-auto whitespace-pre-wrap max-h-64">System Initialized. Bootstrapping WASM Runtime...</pre>
-        </section>
+<div class="container">
+  <h1>Project Plan Generator</h1>
+  <p>Upload a Work Assignment Brief (<strong>.docx</strong>) to automatically extract requirements and populate the repository's <code>Project Plan template.docx</code>.</p>
+  
+  <form id="uploadForm">
+    <div class="drop-zone" id="dropZone">
+      <span id="dropZoneText">Click or Drag & Drop WAB (.docx) File Here</span>
+      <input type="file" id="wabFileInput" class="file-input" accept=".docx" required />
     </div>
 
-    <script>
-        let pyodideModule = null;
+    <button type="submit" id="submitBtn" class="btn" disabled>Generate Project Plan</button>
+  </form>
 
-        function logToConsole(message) {
-            if (!message || !message.trim()) return;
-            const out = document.getElementById("console_output");
-            out.textContent += "\n" + message;
-            out.scrollTop = out.scrollHeight;
-        }
+  <div id="status">Checking repository template file...</div>
+</div>
 
-        // Initialize Python WebAssembly Virtual Engine
-        async function initPyodideEngine() {
-            try {
-                logToConsole("Initializing Pyodide WebAssembly Engine...");
-                pyodideModule = await loadPyodide();
-                
-                logToConsole("Installing required pipeline packages (micropip, python-docx)...");
-                await pyodideModule.loadPackage("micropip");
-                await pyodideModule.runPythonAsync(`
-                    import micropip
-                    await micropip.install('python-docx')
-                `);
-                
-                logToConsole("Environment Ready. Upload a WAB document to begin.");
-                const btn = document.getElementById("run_pipeline_btn");
-                btn.disabled = false;
-                btn.innerText = "Generate & Populate Project Plan (.docx)";
-            } catch (err) {
-                logToConsole("WASM Critical Initialization Error: " + err.message);
-            }
-        }
-        initPyodideEngine();
+<script>
+  let templateArrayBuffer = null;
+  const TEMPLATE_FILE_NAME = "Project Plan template.docx";
 
-        // Universal Fetch Helper across Environment Deployment Paths
-        async function fetchTemplateFile(filename) {
-            const encodedFilename = encodeURIComponent(filename);
-            const relativePath = `./${encodedFilename}`;
-            const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
-            const absolutePath = `${window.location.origin}${basePath}${encodedFilename}`;
-            const rootPath = `${window.location.origin}/${encodedFilename}`;
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('wabFileInput');
+  const dropZoneText = document.getElementById('dropZoneText');
+  const submitBtn = document.getElementById('submitBtn');
+  const statusDiv = document.getElementById('status');
 
-            const candidates = [relativePath, absolutePath, rootPath];
-            for (const url of candidates) {
-                try {
-                    const response = await fetch(url);
-                    if (response.ok) {
-                        const buffer = await response.arrayBuffer();
-                        return new Uint8Array(buffer);
-                    }
-                } catch (e) {}
-            }
-            throw new Error(`Could not locate repository template '${filename}'. Verify that 'Project Plan template_4.docx' is stored in the repository root.`);
-        }
+  // Load the project plan template directly from the GitHub Pages repository on startup
+  window.addEventListener('DOMContentLoaded', async () => {
+    try {
+      const response = await fetch(`./${TEMPLATE_FILE_NAME}`);
+      if (!response.ok) {
+        throw new Error(`Failed to load "${TEMPLATE_FILE_NAME}" from repository.`);
+      }
+      templateArrayBuffer = await response.arrayBuffer();
+      statusDiv.textContent = `Repository template "${TEMPLATE_FILE_NAME}" loaded successfully and ready.`;
+    } catch (err) {
+      console.error(err);
+      statusDiv.textContent = `Error: Could not fetch "${TEMPLATE_FILE_NAME}" from repository. Ensure it exists in the repo root.`;
+    }
+  });
 
-        // Handle File Selection
-        async function handleFileChange(event) {
-            const file = event.target.files[0];
-            if (!file) return;
+  dropZone.addEventListener('click', () => fileInput.click());
 
-            document.getElementById('file_label_text').textContent = `📄 Loaded File: ${file.name}`;
-            logToConsole(`Analyzing WAB File: ${file.name}...`);
+  fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+      dropZoneText.textContent = `Selected: ${e.target.files[0].name}`;
+      if (templateArrayBuffer) submitBtn.disabled = false;
+    }
+  });
 
-            const buffer = await file.arrayBuffer();
-            const fileData = new Uint8Array(buffer);
+  dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.style.background = '#e1f0ff';
+  });
 
-            try { pyodideModule.FS.unlink("input_wab.docx"); } catch(e){}
-            pyodideModule.FS.writeFile("input_wab.docx", fileData);
+  dropZone.addEventListener('dragleave', () => {
+    dropZone.style.background = '#f0f7ff';
+  });
 
-            // Auto-extract metadata and populate input fields
-            const extractScript = `
-import re
-from docx import Document
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.style.background = '#f0f7ff';
+    if (e.dataTransfer.files.length > 0) {
+      fileInput.files = e.dataTransfer.files;
+      dropZoneText.textContent = `Selected: ${e.dataTransfer.files[0].name}`;
+      if (templateArrayBuffer) submitBtn.disabled = false;
+    }
+  });
 
-doc = Document("input_wab.docx")
+  /**
+   * Client-side dynamic extraction logic
+   */
+  function extractDynamicWabData(text) {
+    // 1. Department Extraction
+    const deptMatch = text.match(/(?:Department|Bureau|Office)\s+of\s+[A-Za-z\s]+|Food and Environmental Hygiene Department|Education Bureau|Department of Health/i);
+    const deptName = deptMatch ? deptMatch[0].trim() : "Government Department";
 
-full_text = "\\n".join([p.text.strip() for p in doc.paragraphs if p.text.strip()])
+    const abbrMatch = text.match(/\((FEHD|DH|EDB|DPO|HKPF)\)/i) || text.match(/([A-Z]{2,6})\s+Work Assignment/);
+    const deptAbbr = abbrMatch ? abbrMatch[1].toUpperCase() : (deptName.match(/\b([A-Z])/g) || []).join('');
 
-dept_name = ""
-dept_abbr = ""
+    // 2. System Name & Abbreviation
+    let systemName = "Information System";
+    let systemAbbr = "IS";
 
-m_dept = re.search(r'(?:Education Bureau|Immigration Department|Civil Service Bureau|Customs and Excise Department|[A-Z][A-Za-z\\s]+(?:Bureau|Department|Office))', full_text)
-if m_dept:
-    dept_name = m_dept.group(0).strip()
+    const systemMatch = text.match(/(?:for|of)\s+(?:the\s+)?([A-Z0-9\s\-\/,\(\)]+?\b(?:System|Platform|Service|Enhancement|Website)\b)/i);
+    if (systemMatch) {
+      systemName = systemMatch[1].replace(/\s+/g, ' ').trim();
+      const abbrInSys = systemName.match(/\(([^)]+)\)/);
+      systemAbbr = abbrInSys ? abbrInSys[1] : (systemName.match(/\b([A-Z0-9])/g) || []).join('');
+    }
 
-m_abbr = re.search(r'\\b(EDB|ImmD|CSB|C&ED|HKPF|ArchSD|HD)\\b', full_text)
-if m_abbr:
-    dept_abbr = m_abbr.group(1).strip()
+    // 3. Dynamic PIA Scope Detection (HAS_PIA)
+    const hasPia = /Privacy Impact Assessment|PIA|Privacy Compliance Audit|PCA/i.test(text) &&
+                   !/PIA\s+(?:is\s+)?not\s+required|No\s+PIA/i.test(text);
 
-sys_matches = re.findall(r'([A-Z][A-Za-z0-9\\s&,\\-\\.\'\"]{3,70})\\s*\\(([A-Z0-9\\-]{2,12})\\)', full_text)
-sys_name = sys_matches[0][0].strip() if sys_matches else ""
-sys_abbr = sys_matches[0][1].strip().upper() if sys_matches else ""
+    // 4. Dynamic Schedule Dates
+    const dates = text.match(/\b(?:\d{1,2}\s+)?(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\b/gi) || [];
+    const currentDateStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    const completionDate = dates.length > 0 ? dates[dates.length - 1] : "October 2026";
+    const startDate = dates.length > 1 ? dates[0] : "July 2026";
 
-if not sys_name:
-    m_sys = re.search(r'in relation to\\s+["\'“]([^"\'”]+)["\'”]', full_text, re.IGNORECASE)
-    if m_sys:
-        sys_name = m_sys.group(1).strip()
+    // 5. Scope & Objectives Text
+    const sraaObjMatch = text.match(/Objectives?[\s\S]*?(?=Scope|2\.|3\.)/i);
+    const sraaScopeMatch = text.match(/Scope\s+of\s+Service[\s\S]*?(?=Approach|3\.|4\.)/i);
 
-import js
-js.updateFields(sys_name, sys_abbr, dept_name, dept_abbr)
-`;
-            try {
-                await pyodideModule.runPythonAsync(extractScript);
-                logToConsole("Metadata fields extracted successfully from WAB!");
-            } catch (err) {
-                logToConsole("WAB Extract Notice: " + err.message);
-            }
-        }
+    const sraaObjectives = sraaObjMatch 
+      ? sraaObjMatch[0].replace(/Objectives?/i, '').trim().slice(0, 500) 
+      : `To perform a comprehensive Security Risk Assessment and Audit (SRAA) for ${systemName} in accordance with baseline security requirements.`;
 
-        function updateFields(sysName, sysAbbr, deptName, deptAbbr) {
-            if (sysName) document.getElementById('sys_name_input').value = sysName;
-            if (sysAbbr) document.getElementById('sys_abbr_input').value = sysAbbr;
-            if (deptName) document.getElementById('dept_name_input').value = deptName;
-            if (deptAbbr) document.getElementById('dept_abbr_input').value = deptAbbr;
-        }
+    const sraaScope = sraaScopeMatch 
+      ? sraaScopeMatch[0].replace(/Scope\s+of\s+Service/i, '').trim().slice(0, 600) 
+      : `The scope covers security risk assessment, general control reviews, technical vulnerability scanning, and penetration testing for ${systemName}.`;
 
-        // Execute Project Plan Template Ingestion and Variable Substitution
-        async function executePlanPipeline() {
-            if (!pyodideModule) return;
+    return {
+      DEPARTMENT_NAME: deptName,
+      DEPARTMENT_ABBR: deptAbbr,
+      SYSTEM_NAME: systemName,
+      SYSTEM_ABBR: systemAbbr,
+      VERSION_DATE: currentDateStr,
+      TENTATIVE_COMPLETION_DATE: completionDate,
 
-            const sysName = document.getElementById('sys_name_input').value || "Selected System";
-            const sysAbbr = document.getElementById('sys_abbr_input').value || "SYSTEM";
-            const deptName = document.getElementById('dept_name_input').value || "Government Department";
-            const deptAbbr = document.getElementById('dept_abbr_input').value || "DEPT";
+      HAS_PIA: hasPia,
+      SRAA_OBJECTIVES: sraaObjectives,
+      PIAA_OBJECTIVES: hasPia ? `To conduct a Privacy Impact Assessment (PIA) and Privacy Compliance Audit (PCA) for ${systemName} to ensure compliance with the Personal Data (Privacy) Ordinance.` : "",
+      SRAA_SCOPE: sraaScope,
 
-            logToConsole("Fetching 'Project Plan template_4.docx' directly from GitHub repository...");
+      DATE_STAGE_0: startDate,
+      DATE_INTRO_MEETING: startDate,
+      DATE_PROJECT_PLAN: startDate,
+      DATE_CHECKLISTS: completionDate,
+      DATE_SRAA_COMPLETION: completionDate,
+      DATE_PRESENTATION: completionDate,
+      DATE_CLOSURE: completionDate
+    };
+  }
 
-            try {
-                const templateData = await fetchTemplateFile("Project Plan template_4.docx");
-                try { pyodideModule.FS.unlink("project_plan_template.docx"); } catch(e){}
-                pyodideModule.FS.writeFile("project_plan_template.docx", templateData);
-            } catch (err) {
-                logToConsole("Error: " + err.message);
-                return;
-            }
+  document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const uploadedFile = fileInput.files[0];
+    if (!uploadedFile || !templateArrayBuffer) return;
 
-            pyodideModule.globals.set("JS_SYS_NAME", sysName);
-            pyodideModule.globals.set("JS_SYS_ABBR", sysAbbr);
-            pyodideModule.globals.set("JS_DEPT_NAME", deptName);
-            pyodideModule.globals.set("JS_DEPT_ABBR", deptAbbr);
+    statusDiv.textContent = 'Parsing uploaded WAB document...';
+    submitBtn.disabled = true;
 
-            const pythonScript = `
-import re
-import sys
-import datetime
-from docx import Document
+    try {
+      // 1. Read uploaded DOCX file in browser as ArrayBuffer
+      const wabBuffer = await uploadedFile.arrayBuffer();
 
-class BrowserLogRedirect:
-    def write(self, s):
-        import js
-        js.logToConsole(str(s))
-    def flush(self): pass
+      // 2. Extract plain text with mammoth in browser
+      const mammothResult = await mammoth.extractRawText({ arrayBuffer: wabBuffer });
+      const rawText = mammothResult.value;
 
-sys.stdout = BrowserLogRedirect()
-sys.stderr = BrowserLogRedirect()
+      // 3. Extract parameters dynamically
+      const templateData = extractDynamicWabData(rawText);
 
-sys_name = JS_SYS_NAME
-sys_abbr = JS_SYS_ABBR
-dept_name = JS_DEPT_NAME
-dept_abbr = JS_DEPT_ABBR
+      statusDiv.textContent = 'Rendering project plan template...';
 
-now = datetime.datetime.now()
-version_date = now.strftime("%B %Y")
+      // 4. Load repository template into PizZip & docxtemplater
+      const zip = new PizZip(templateArrayBuffer);
+      const doc = new window.docxtemplater(zip, {
+        paragraphLoop: true,
+        linebreaks: true,
+      });
 
-wab_doc = Document("input_wab.docx")
-full_wab_text = "\\n".join([p.text.strip() for p in wab_doc.paragraphs if p.text.strip()])
+      // Render placeholders
+      doc.render(templateData);
 
-# 1. Determine Start Date Anchor
-m_start = re.search(r'(?:tentative start date|commence on|conducted from)[^\\.\\n]*?is\\s+([A-Za-z]+\\s+\\d{4}|\\d{1,2}\\s+[A-Za-z]+\\s+\\d{4})', full_wab_text, re.IGNORECASE)
-base_date = now
-if m_start:
-    try:
-        raw_date_str = m_start.group(1).strip()
-        for fmt in ("%B %Y", "%d %B %Y", "%b %Y"):
-            try:
-                base_date = datetime.datetime.strptime(raw_date_str, fmt)
-                break
-            except ValueError:
-                pass
-    except Exception:
-        base_date = now
+      // 5. Generate output binary blob & trigger browser download
+      const outBlob = doc.getZip().generate({
+        type: 'blob',
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      });
 
-def add_days(d, days):
-    return (d + datetime.timedelta(days=days)).strftime("%d/%m/%Y")
+      const downloadUrl = URL.createObjectURL(outBlob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `Generated_Project_Plan_${uploadedFile.name}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(downloadUrl);
 
-def add_weeks(d, weeks):
-    return add_days(d, weeks * 7)
+      statusDiv.textContent = 'Project plan generated and downloaded successfully!';
+    } catch (err) {
+      console.error(err);
+      statusDiv.textContent = 'Error processing document. Please check console for details.';
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+</script>
 
-# 2. Check for Privacy Impact Assessment (PIA/PIAA)
-has_pia = bool(re.search(r'Privacy Impact Assessment|PIAA|PIA\\b', full_wab_text, re.IGNORECASE))
-
-# 3. Extract Section Content
-sraa_obj_matches = re.findall(r'(?:PROJECT OBJECTIVES|Project Objectives)[^\\n]*\\n([\\s\\S]*?)(?=(?:PROJECT REQUIREMENTS|SCOPE OF THE SERVICES|Scope of Service|\\d\\.|\\Z))', full_wab_text, re.IGNORECASE)
-sraa_objectives = sraa_obj_matches[0].strip() if sraa_obj_matches else "Evaluate security risks, check compliance with S17 and G3 guidelines, and recommend safeguards."
-
-piaa_objectives = ""
-if has_pia:
-    piaa_obj_matches = re.findall(r'(?:Privacy Impact Assessment|PIAA)[^\\n]*\\n([\\s\\S]*?)(?=(?:SCOPE OF THE SERVICES|Scope of Service|\\d\\.|\\Z))', full_wab_text, re.IGNORECASE)
-    piaa_objectives = piaa_obj_matches[0].strip() if piaa_obj_matches else "Identify data privacy risks, analyze data processing cycles, and ensure Cap. 486 compliance."
-
-sraa_scope_matches = re.findall(r'(?:SCOPE OF THE SERVICES|Scope of Service)[^\\n]*\\n([\\s\\S]*?)(?=(?:BACKGROUND|PROJECT OBJECTIVES|\\d\\.|\\Z))', full_wab_text, re.IGNORECASE)
-sraa_scope = sraa_scope_matches[0].strip() if sraa_scope_matches else "Covers general control review, technical vulnerability scanning, penetration testing, configuration review, and source code review."
-
-completion_date = add_weeks(base_date, 12)
-
-replacements = {
-    "{{SYSTEM_NAME}}": sys_name,
-    "{{SYSTEM_ABBR}}": sys_abbr,
-    "{{DEPARTMENT_NAME}}": dept_name,
-    "{{DEPARTMENT_ABBR}}": dept_abbr,
-    "{{VERSION_DATE}}": version_date,
-    "{{TENTATIVE_COMPLETION_DATE}}": completion_date,
-    "{{SRAA_OBJECTIVES}}": sraa_objectives,
-    "{{PIAA_OBJECTIVES}}": piaa_objectives,
-    "{{SRAA_SCOPE}}": sraa_scope,
-    "{{DATE_STAGE_0}}": add_weeks(base_date, 1),
-    "{{DATE_INTRO_MEETING}}": add_days(base_date, 10),
-    "{{DATE_PROJECT_PLAN}}": add_weeks(base_date, 2),
-    "{{DATE_CHECKLISTS}}": add_weeks(base_date, 3),
-    "{{DATE_SRAA_COMPLETION}}": add_weeks(base_date, 8),
-    "{{DATE_PRESENTATION}}": add_weeks(base_date, 9),
-    "{{DATE_CLOSURE}}": completion_date
-}
-
-plan_doc = Document("project_plan_template.docx")
-
-def replace_and_clean_paragraph(p):
-    full_p_text = "".join(r.text for r in p.runs)
-    if not full_p_text.strip():
-        return
-
-    # Apply tag replacements
-    for key, val in replacements.items():
-        if key in full_p_text:
-            full_p_text = full_p_text.replace(key, val)
-
-    # Process conditional markers
-    full_p_text = full_p_text.replace("{{#HAS_PIA}}", "").replace("{{/HAS_PIA}}", "")
-
-    # Cleanup any lingering template tags
-    full_p_text = re.sub(r'\\{\\{.*?\\}\\}', '', full_p_text)
-
-    if p.runs:
-        p.runs[0].text = full_p_text
-        for r in p.runs[1:]:
-            r.text = ""
-    else:
-        p.text = full_p_text
-
-# Replace in body paragraphs and table cells
-for p in plan_doc.paragraphs:
-    replace_and_clean_paragraph(p)
-
-for table in plan_doc.tables:
-    for row in table.rows:
-        for cell in row.cells:
-            for cell_p in cell.paragraphs:
-                replace_and_clean_paragraph(cell_p)
-
-plan_doc.save("Populated_Project_Plan.docx")
-print("Project Plan successfully populated and saved!")
-`;
-
-            try {
-                await pyodideModule.runPythonAsync(pythonScript);
-                const outputBytes = pyodideModule.FS.readFile("Populated_Project_Plan.docx");
-                const blob = new Blob([outputBytes], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `Project_Plan_${sysAbbr}.docx`;
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                logToConsole("Success: Downloaded populated Project Plan (.docx)!");
-            } catch (err) {
-                logToConsole("Pipeline Fault: " + err.message);
-            }
-        }
-    </script>
 </body>
 </html>
