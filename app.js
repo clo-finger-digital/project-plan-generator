@@ -84,28 +84,51 @@ async function extractWabDataFromFile(file) {
 }
 
 /**
+ * Robustly extracts ALL bullet items verbatim from Section 1 (SCOPE OF THE SERVICES).
+ */
+function extractSraaScope(text) {
+  if (!text) return "";
+
+  const matches = [...text.matchAll(/SCOPE OF THE SERVICES([\s\S]*?)(?=(?:\bBACKGROUND\b|2\.\s*BACKGROUND|\bPROJECT OBJECTIVES\b|$))/gi)];
+
+  if (matches.length === 0) return "";
+
+  let rawScopeText = matches[matches.length - 1][1];
+
+  // Remove administrative intro paragraph
+  rawScopeText = rawScopeText.replace(/As a SOA Contractor in Category B[\s\S]*?invited to provide the following services.*?:/i, '');
+
+  // Strip trailing SOA terms and price boilerplates if present
+  rawScopeText = rawScopeText.replace(/Unless otherwise defined in this Brief[\s\S]*$/i, '');
+  rawScopeText = rawScopeText.replace(/This work assignment is fixed cost project[\s\S]*$/i, '');
+  rawScopeText = rawScopeText.replace(/The total price quoted in Price Proposal[\s\S]*$/i, '');
+
+  const cleanScope = rawScopeText
+    .split(/\n+/)
+    .map(line => line.trim())
+    .filter(line => line.length > 0)
+    .join('\n\n');
+
+  return cleanScope;
+}
+
+/**
  * Robustly extracts ALL items starting with "It is to..." verbatim inside Section 3 (PROJECT OBJECTIVES).
- * Bypasses Table of Contents entries and handles varying section terminations.
  */
 function extractSraaObjectives(text) {
   if (!text) return "";
 
-  // Capture Section 3 text body between PROJECT OBJECTIVES and Section 4 (PROJECT REQUIREMENTS / USER REQUIREMENTS)
   const matches = [...text.matchAll(/PROJECT OBJECTIVES([\s\S]*?)(?=(?:PROJECT REQUIREMENTS|4\.\s*PROJECT REQUIREMENTS|\bUSER REQUIREMENTS\b|$))/gi)];
 
   if (matches.length === 0) return "";
 
-  // Select the last match to bypass any Table of Contents occurrence
   const rawSectionText = matches[matches.length - 1][1];
 
-  // Split section text reliably using boundary lookahead on "It is to"
   const items = [];
   const parts = rawSectionText.split(/\b(?=It is to\b)/i);
 
   for (let part of parts) {
     let cleanPart = part.replace(/\s+/g, ' ').trim();
-
-    // Clean leading bullets, numbers, or lettering if present
     cleanPart = cleanPart.replace(/^(?:\([a-z0-9]+\)|\d+\.|[•\-\*])\s*/i, '');
 
     if (/^It is to\b/i.test(cleanPart)) {
@@ -116,9 +139,8 @@ function extractSraaObjectives(text) {
   }
 
   if (items.length > 0) {
-    // Format into lettered point form verbatim: (a) It is to... \n\n (b) It is to...
     return items.map((item, index) => {
-      const letter = String.fromCharCode(97 + index); // 'a', 'b', 'c'...
+      const letter = String.fromCharCode(97 + index);
       return `(${letter}) ${item}`;
     }).join('\n\n');
   }
@@ -132,7 +154,6 @@ function extractSraaObjectives(text) {
 function extractPiaaObjectives(text) {
   if (!text) return "";
 
-  // Check for explicit PIA objectives block
   const match = text.match(/The objectives of PIA services are:[\s\S]*?(?=PROJECT REQUIREMENTS|4\.)/i) ||
                 text.match(/Privacy Impact Assessment.*?Objectives?[\s\S]*?(?=Scope|Requirements)/i);
 
@@ -142,46 +163,6 @@ function extractPiaaObjectives(text) {
       .trim();
     if (rawObj.length > 20) return rawObj;
   }
-
-  return "";
-}
-
-/**
- * Extracts SRAA Scope directly from SCOPE OF THE SERVICES in WAB verbatim.
- * Handles Table of Contents duplication and removes admin boilerplate.
- */
-/**
- * Robustly extracts ALL bullet items verbatim from Section 1 (SCOPE OF THE SERVICES).
- * Bypasses Table of Contents entries and retains all scope items.
- */
-function extractSraaScope(text) {
-  if (!text) return "";
-
-  // Capture Section 1 text body between "SCOPE OF THE SERVICES" and "BACKGROUND"
-  const matches = [...text.matchAll(/SCOPE OF THE SERVICES([\s\S]*?)(?=(?:\bBACKGROUND\b|2\.\s*BACKGROUND|\bPROJECT OBJECTIVES\b|$))/gi)];
-
-  if (matches.length === 0) return "";
-
-  // Select the body match (skipping Table of Contents entries)
-  let rawScopeText = matches[matches.length - 1][1];
-
-  // Remove the administrative invitation intro paragraph if present
-  rawScopeText = rawScopeText.replace(/As a SOA Contractor in Category B[\s\S]*?invited to provide the following services.*?:/i, '');
-
-  // Strip trailing SOA terms and price boilerplates if present at the end of Section 1
-  rawScopeText = rawScopeText.replace(/Unless otherwise defined in this Brief[\s\S]*$/i, '');
-  rawScopeText = rawScopeText.replace(/This work assignment is fixed cost project[\s\S]*$/i, '');
-  rawScopeText = rawScopeText.replace(/The total price quoted in Price Proposal[\s\S]*$/i, '');
-
-  // Clean extra blank space while preserving item lines
-  const cleanScope = rawScopeText
-    .split(/\n+/)
-    .map(line => line.trim())
-    .filter(line => line.length > 0)
-    .join('\n\n');
-
-  return cleanScope;
-}
 
   return "";
 }
