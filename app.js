@@ -61,6 +61,11 @@ async function extractWabDataFromFile(file) {
   const completionDate = dates.length > 0 ? dates[dates.length - 1] : "October 2026";
   const startDate = dates.length > 1 ? dates[0] : "July 2026";
 
+  // 5. Dynamic Scope & Objectives Extraction directly from WAB
+  const extractedSraaObjectives = extractSraaObjectives(text, primarySystem);
+  const extractedPiaaObjectives = hasPia ? extractPiaaObjectives(text, primarySystem) : "";
+  const extractedSraaScope = extractSraaScope(text, primarySystem);
+
   return {
     DEPARTMENT_NAME: deptName,
     DEPARTMENT_ABBR: deptAbbr,
@@ -69,8 +74,61 @@ async function extractWabDataFromFile(file) {
     DETECTED_SYSTEMS: detectedSystems,
     HAS_PIA: hasPia,
     DATE_START: startDate,
-    TENTATIVE_COMPLETION_DATE: completionDate
+    TENTATIVE_COMPLETION_DATE: completionDate,
+    SRAA_OBJECTIVES: extractedSraaObjectives,
+    PIAA_OBJECTIVES: extractedPiaaObjectives,
+    SRAA_SCOPE: extractedSraaScope
   };
+}
+
+/**
+ * Extracts SRAA Objectives directly from WAB text.
+ */
+function extractSraaObjectives(text, systemName) {
+  const match = text.match(/PROJECT OBJECTIVES[\s\S]*?(?=PROJECT REQUIREMENTS|4\.|SCOPE OF THE SERVICES)/i) ||
+                text.match(/Objectives?[\s\S]*?(?=Scope|Requirements)/i);
+  
+  if (match) {
+    let rawObj = match[0]
+      .replace(/PROJECT OBJECTIVES/i, '')
+      .replace(/The objectives of.*are:/i, '')
+      .trim();
+    if (rawObj.length > 20) return rawObj;
+  }
+  return `(a) To evaluate the security risks of ${systemName} and related data of the department.\n(b) To determine the level of compliance with baseline government IT security requirements (S17/G3).\n(c) To verify after implementation of safeguards that identified risks are mitigated.`;
+}
+
+/**
+ * Extracts PIAA Objectives directly from WAB text.
+ */
+function extractPiaaObjectives(text, systemName) {
+  const match = text.match(/The objectives of PIA services are:[\s\S]*?(?=PROJECT REQUIREMENTS|4\.)/i) ||
+                text.match(/Privacy Impact Assessment.*?Objectives?[\s\S]*?(?=Scope|Requirements)/i);
+
+  if (match) {
+    let rawObj = match[0]
+      .replace(/The objectives of PIA services are:/i, '')
+      .trim();
+    if (rawObj.length > 20) return rawObj;
+  }
+  return `To conduct a Privacy Impact Assessment (PIA) and Privacy Compliance Audit (PCA) for ${systemName} to ensure full compliance with the Personal Data (Privacy) Ordinance.`;
+}
+
+/**
+ * Extracts SRAA Scope directly from WAB text.
+ */
+function extractSraaScope(text, systemName) {
+  const match = text.match(/SCOPE OF THE SERVICES[\s\S]*?(?=BACKGROUND|PROJECT OBJECTIVES|2\.)/i) ||
+                text.match(/Scope of Service[\s\S]*?(?=Approach|Objectives)/i);
+
+  if (match) {
+    let rawScope = match[0]
+      .replace(/SCOPE OF THE SERVICES/i, '')
+      .replace(/Scope of Service/i, '')
+      .trim();
+    if (rawScope.length > 30) return rawScope;
+  }
+  return `To assess the overall information security level by evaluating the security risks of ${systemName} and related data, identifying recommended safeguards to strengthen system protection.`;
 }
 
 /**
@@ -99,7 +157,7 @@ function extractSystemsFromText(text) {
 }
 
 /**
- * Generates and downloads the populated Word document with explicit MultiError handling.
+ * Generates and downloads the populated Word document.
  */
 async function generateAndDownloadDocx(formData, originalFileName) {
   if (!repositoryTemplateBuffer) {
@@ -108,7 +166,6 @@ async function generateAndDownloadDocx(formData, originalFileName) {
 
   const currentDateStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
-  // Supply defaults for ALL possible template variables to prevent undefined key errors
   const templateContext = {
     DEPARTMENT_NAME: formData.DEPARTMENT_NAME || "Government Department",
     DEPARTMENT_ABBR: formData.DEPARTMENT_ABBR || "GOV",
@@ -118,9 +175,9 @@ async function generateAndDownloadDocx(formData, originalFileName) {
     TENTATIVE_COMPLETION_DATE: formData.TENTATIVE_COMPLETION_DATE || "October 2026",
 
     HAS_PIA: Boolean(formData.HAS_PIA),
-    SRAA_OBJECTIVES: `To perform a comprehensive Security Risk Assessment and Audit (SRAA) for ${formData.SYSTEM_NAME} in accordance with baseline security requirements.`,
-    PIAA_OBJECTIVES: formData.HAS_PIA ? `To conduct a Privacy Impact Assessment (PIA) and Privacy Compliance Audit (PCA) for ${formData.SYSTEM_NAME} to ensure compliance with the Personal Data (Privacy) Ordinance.` : "",
-    SRAA_SCOPE: `The scope covers security risk assessment, general control reviews, technical vulnerability scanning, and penetration testing for ${formData.SYSTEM_NAME}.`,
+    SRAA_OBJECTIVES: formData.SRAA_OBJECTIVES,
+    PIAA_OBJECTIVES: formData.HAS_PIA ? formData.PIAA_OBJECTIVES : "",
+    SRAA_SCOPE: formData.SRAA_SCOPE,
 
     DATE_STAGE_0: formData.DATE_START || "July 2026",
     DATE_INTRO_MEETING: formData.DATE_START || "July 2026",
@@ -131,20 +188,13 @@ async function generateAndDownloadDocx(formData, originalFileName) {
     DATE_CLOSURE: formData.TENTATIVE_COMPLETION_DATE || "October 2026"
   };
 
-  // Safe resolver for constructors across CDNs
   const PizZipConstructor = window.PizZip || window.pizzip || (window.docxtemplater && window.docxtemplater.PizZip);
   const DocxtemplaterConstructor = window.docxtemplater || window.Docxtemplater;
 
-  if (!PizZipConstructor) {
-    throw new Error("PizZip engine missing. Verify CDN script tags in index.html.");
-  }
-  if (!DocxtemplaterConstructor) {
-    throw new Error("Docxtemplater engine missing. Verify CDN script tags in index.html.");
-  }
+  if (!PizZipConstructor) throw new Error("PizZip engine missing. Verify CDN script tags.");
+  if (!DocxtemplaterConstructor) throw new Error("Docxtemplater engine missing. Verify CDN script tags.");
 
   const zip = new PizZipConstructor(repositoryTemplateBuffer);
-  
-  // Initialize Docxtemplater with strict XML paragraph loop handling
   const doc = new DocxtemplaterConstructor(zip, {
     paragraphLoop: true,
     linebreaks: true,
@@ -154,16 +204,13 @@ async function generateAndDownloadDocx(formData, originalFileName) {
   try {
     doc.render(templateContext);
   } catch (error) {
-    // Catch Docxtemplater MultiError and list exact tag errors
     if (error.properties && error.properties.errors instanceof Array) {
       const errorDetails = error.properties.errors.map(e => {
         const tag = e.properties && e.properties.id ? ` Tag: "${e.properties.id}"` : '';
         const explanation = e.properties && e.properties.explanation ? e.properties.explanation : e.message;
         return `${explanation}${tag}`;
       }).join(' | ');
-      
-      console.error("[Docxtemplater MultiError Unhandled List]:", error.properties.errors);
-      throw new Error(`Template Format Error in Word document: ${errorDetails}`);
+      throw new Error(`Template Format Error: ${errorDetails}`);
     }
     throw error;
   }
