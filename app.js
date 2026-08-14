@@ -1,7 +1,5 @@
 /**
- * Project Plan Generator - Client-Side Engine (GitHub Pages)
- * Extracts dynamic data from uploaded WAB .docx files and populates
- * "Project Plan template.docx".
+ * Project Plan Generator - Client Engine (GitHub Pages)
  */
 
 let repositoryTemplateBuffer = null;
@@ -27,8 +25,6 @@ async function loadRepositoryTemplate() {
 
 /**
  * Extracts raw text from an uploaded WAB .docx file using mammoth.
- * @param {File} file - Uploaded File object
- * @returns {Promise<Object>} Extracted metadata & detected system list
  */
 async function extractWabDataFromFile(file) {
   if (!file) {
@@ -104,6 +100,7 @@ function extractSystemsFromText(text) {
 
 /**
  * Generates and triggers browser download for the populated Word document.
+ * Includes explicit handling for Docxtemplater MultiError instances.
  */
 async function generateAndDownloadDocx(formData, originalFileName) {
   if (!repositoryTemplateBuffer) {
@@ -134,41 +131,41 @@ async function generateAndDownloadDocx(formData, originalFileName) {
     DATE_CLOSURE: formData.TENTATIVE_COMPLETION_DATE || "October 2026"
   };
 
-  const DocxtemplaterClass = window.docxtemplater || window.Docxtemplater;
-  if (!DocxtemplaterClass) {
-    throw new Error("Docxtemplater library missing. Ensure docxtemplater.js is included.");
+  // Safe resolver for constructors across CDNs
+  const PizZipConstructor = window.PizZip || window.pizzip || (window.docxtemplater && window.docxtemplater.PizZip);
+  const DocxtemplaterConstructor = window.docxtemplater || window.Docxtemplater;
+
+  if (!PizZipConstructor) {
+    throw new Error("PizZip library missing. Ensure pizzip script tag is included.");
+  }
+  if (!DocxtemplaterConstructor) {
+    throw new Error("Docxtemplater library missing. Ensure docxtemplater script tag is included.");
   }
 
-  let zip;
-  const PizZipClass = window.PizZip || window.pizzip;
-
-  if (PizZipClass) {
-    zip = new PizZipClass(repositoryTemplateBuffer);
-  } else if (window.JSZip && typeof window.JSZip.loadAsync === 'function') {
-    zip = await window.JSZip.loadAsync(repositoryTemplateBuffer);
-  } else {
-    throw new Error("Neither PizZip nor JSZip library could be initialized properly.");
-  }
-
-  const doc = new DocxtemplaterClass(zip, {
+  const zip = new PizZipConstructor(repositoryTemplateBuffer);
+  const doc = new DocxtemplaterConstructor(zip, {
     paragraphLoop: true,
     linebreaks: true,
   });
 
-  doc.render(templateContext);
-
-  let outputBlob;
-  if (zip.generateAsync) {
-    outputBlob = await doc.getZip().generateAsync({
-      type: 'blob',
-      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    });
-  } else {
-    outputBlob = doc.getZip().generate({
-      type: 'blob',
-      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    });
+  try {
+    doc.render(templateContext);
+  } catch (error) {
+    // Catch Docxtemplater MultiError and extract broken tag names
+    if (error.properties && error.properties.errors instanceof Array) {
+      const errorMessages = error.properties.errors
+        .map(e => e.properties && e.properties.explanation ? e.properties.explanation : e.message)
+        .join(" | ");
+      console.error("[Docxtemplater MultiError Details]:", error.properties.errors);
+      throw new Error(`Template Syntax Error: ${errorMessages}`);
+    }
+    throw error;
   }
+
+  const outputBlob = doc.getZip().generate({
+    type: 'blob',
+    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  });
 
   const downloadUrl = URL.createObjectURL(outputBlob);
   const anchor = document.createElement('a');
@@ -180,7 +177,7 @@ async function generateAndDownloadDocx(formData, originalFileName) {
   URL.revokeObjectURL(downloadUrl);
 }
 
-// Explicitly export to window object
+// Export functions to window scope
 window.loadRepositoryTemplate = loadRepositoryTemplate;
 window.extractWabDataFromFile = extractWabDataFromFile;
 window.generateAndDownloadDocx = generateAndDownloadDocx;
