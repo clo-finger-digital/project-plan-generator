@@ -68,7 +68,7 @@
       margin-bottom: 5px;
       color: #444;
     }
-    .form-group input, .form-group select, .form-group textarea {
+    .form-group input, .form-group select {
       width: 100%;
       padding: 8px 12px;
       border: 1px solid #ccc;
@@ -121,7 +121,7 @@
 
 <div class="container">
   <h1>Project Plan Generator</h1>
-  <p>Upload a Work Assignment Brief (<strong>.docx</strong>) to automatically extract project information, review or edit the fields below, and generate your plan.</p>
+  <p>Upload a Work Assignment Brief (<strong>.docx</strong>) to extract requirements, modify values, and generate your plan.</p>
   
   <form id="uploadForm">
     <div class="drop-zone" id="dropZone">
@@ -129,11 +129,9 @@
       <input type="file" id="wabFileInput" class="file-input" accept=".docx" required />
     </div>
 
-    <!-- Dynamic Editable Fields Section -->
     <div class="form-section" id="formSection">
       <h3>Review & Edit Extracted Details</h3>
 
-      <!-- Department / Testee Details -->
       <div class="form-row">
         <div class="form-group">
           <label for="deptName">Department / Testee Name</label>
@@ -145,7 +143,6 @@
         </div>
       </div>
 
-      <!-- System Selection Dropdown & Manual Input -->
       <div class="form-group">
         <label for="systemSelect">Detected Systems (Select from WAB)</label>
         <select id="systemSelect">
@@ -164,7 +161,6 @@
         </div>
       </div>
 
-      <!-- Dates -->
       <div class="form-row">
         <div class="form-group">
           <label for="startDate">Start Date</label>
@@ -176,7 +172,6 @@
         </div>
       </div>
 
-      <!-- Privacy Scope Toggle -->
       <div class="form-group checkbox-group">
         <input type="checkbox" id="hasPia" name="HAS_PIA" />
         <label for="hasPia">Includes Privacy Impact Assessment (PIA)</label>
@@ -186,10 +181,10 @@
     </div>
   </form>
 
-  <div id="status">Loading template from repository...</div>
+  <div id="status">Loading repository template...</div>
 </div>
 
-<!-- Main Application Script -->
+<!-- Load app.js FIRST before initializing event listeners -->
 <script src="./app.js"></script>
 
 <script>
@@ -204,18 +199,21 @@
   const systemNameInput = document.getElementById('systemName');
   const systemAbbrInput = document.getElementById('systemAbbr');
 
-  // Load repository template on load
   window.addEventListener('DOMContentLoaded', async () => {
+    if (typeof loadRepositoryTemplate !== 'function') {
+      statusDiv.textContent = 'Error: app.js failed to load properly.';
+      return;
+    }
+
     const success = await loadRepositoryTemplate();
     if (success) {
-      statusDiv.textContent = `Repository template "${TEMPLATE_FILE_NAME}" loaded and ready.`;
+      statusDiv.textContent = 'Repository template loaded and ready. Upload a WAB document.';
     } else {
-      statusDiv.textContent = `Error: Could not load "${TEMPLATE_FILE_NAME}" from repository.`;
+      statusDiv.textContent = 'Error: Could not retrieve "Project Plan template.docx" from repository.';
     }
   });
 
   dropZone.addEventListener('click', () => fileInput.click());
-
   fileInput.addEventListener('change', handleFileSelect);
 
   dropZone.addEventListener('dragover', (e) => {
@@ -244,10 +242,14 @@
     statusDiv.textContent = 'Extracting metadata from document...';
 
     try {
+      if (typeof extractWabDataFromFile !== 'function') {
+        throw new Error("extractWabDataFromFile function is missing. Verify app.js is loaded.");
+      }
+
       const extractedData = await extractWabDataFromFile(file);
       populateForm(extractedData);
       formSection.style.display = 'block';
-      statusDiv.textContent = 'Metadata extracted successfully. Review or modify fields below.';
+      statusDiv.textContent = 'Data extracted successfully. Review or edit fields below.';
     } catch (err) {
       console.error(err);
       statusDiv.textContent = `Error extracting data: ${err.message}`;
@@ -261,9 +263,8 @@
     document.getElementById('systemAbbr').value = data.SYSTEM_ABBR || '';
     document.getElementById('startDate').value = data.DATE_START || '';
     document.getElementById('completionDate').value = data.TENTATIVE_COMPLETION_DATE || '';
-    document.getElementById('hasPia').checked = data.HAS_PIA || false;
+    document.getElementById('hasPia').checked = Boolean(data.HAS_PIA);
 
-    // Populate Dynamic System Dropdown
     systemSelect.innerHTML = '<option value="">-- Select a detected system from document --</option>';
     if (data.DETECTED_SYSTEMS && data.DETECTED_SYSTEMS.length > 0) {
       data.DETECTED_SYSTEMS.forEach(sys => {
@@ -276,8 +277,7 @@
     }
   }
 
-  // Handle system selection dropdown change
-  systemSelect.addEventListener('change', (e) => {
+  systemSelect.addEventListener('change', () => {
     const selectedOption = systemSelect.options[systemSelect.selectedIndex];
     if (selectedOption && selectedOption.value) {
       systemNameInput.value = selectedOption.value;
@@ -285,7 +285,6 @@
     }
   });
 
-  // Handle form submission to generate DOCX
   document.getElementById('uploadForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     statusDiv.textContent = 'Generating project plan...';
