@@ -63,7 +63,7 @@ async function extractWabDataFromFile(file) {
   const completionDate = dates.length > 0 ? dates[dates.length - 1] : "";
   const startDate = dates.length > 1 ? dates[0] : "";
 
-  // 5. Dynamic Scope & Objectives Extraction directly from WAB (No generic fallbacks)
+  // 5. Dynamic Scope & Objectives Extraction directly from WAB
   const extractedSraaObjectives = extractSraaObjectives(text);
   const extractedPiaaObjectives = hasPia ? extractPiaaObjectives(text) : "";
   const extractedSraaScope = extractSraaScope(text);
@@ -84,41 +84,67 @@ async function extractWabDataFromFile(file) {
 }
 
 /**
- * Robustly extracts ALL items starting with "It is to" verbatim inside Section 3 (PROJECT OBJECTIVES).
- * Stops strictly before Section 4 (PROJECT REQUIREMENTS).
+ * Extracts SRAA Scope directly from SCOPE OF THE SERVICES in WAB verbatim.
+ */
+function extractSraaScope(text) {
+  // Capture the full block under SCOPE OF THE SERVICES up to BACKGROUND or PROJECT OBJECTIVES
+  const match = text.match(/SCOPE OF THE SERVICES[\s\S]*?(?=BACKGROUND|PROJECT OBJECTIVES|TABLE OF CONTENTS|2\.\s*BACKGROUND)/i) ||
+                text.match(/Scope of Service[\s\S]*?(?=Approach|Objectives|Background)/i);
+
+  if (match) {
+    let rawScope = match[0]
+      .replace(/^SCOPE OF THE SERVICES/i, '')
+      .replace(/^Scope of Service/i, '')
+      .replace(/As a SOA Contractor in Category B[\s\S]*?invited to provide the following services.*?:/i, '')
+      .trim();
+
+    // Clean up trailing administrative boilerplate if captured
+    rawScope = rawScope.replace(/Unless otherwise defined in this Brief[\s\S]*$/i, '').trim();
+    rawScope = rawScope.replace(/This work assignment is fixed cost project[\s\S]*$/i, '').trim();
+    rawScope = rawScope.replace(/The total price quoted in Price Proposal[\s\S]*$/i, '').trim();
+
+    if (rawScope.length > 20) {
+      return rawScope;
+    }
+  }
+
+  return "";
+}
+
+/**
+ * Extracts SRAA Objectives verbatim from Section 3 (PROJECT OBJECTIVES).
+ * Collects items starting with "It is to..." while stopping before Section 4.
  */
 function extractSraaObjectives(text) {
-  // Isolate Section 3 between "PROJECT OBJECTIVES" and Section 4 ("PROJECT REQUIREMENTS")
+  // Isolate Section 3 strictly between "PROJECT OBJECTIVES" and Section 4 ("PROJECT REQUIREMENTS")
   const section3Match = text.match(/PROJECT OBJECTIVES[\s\S]*?(?=PROJECT REQUIREMENTS|4\.\s*PROJECT REQUIREMENTS|$)/i);
 
   if (!section3Match) return "";
 
   const rawSectionText = section3Match[0];
 
-  // Split section text using boundary matching on "It is to"
+  // Match all instances of sentences starting with "It is to"
   const matches = [];
-  const parts = rawSectionText.split(/\b(?=It is to\b)/i);
+  const regex = /(It is to[\s\S]*?)(?=(?:\bIt is to\b|PROJECT REQUIREMENTS|4\.\s*|$))/gi;
+  let m;
 
-  for (let part of parts) {
-    let cleanPart = part.replace(/\s+/g, ' ').trim();
+  while ((m = regex.exec(rawSectionText)) !== null) {
+    let cleanItem = m[1].replace(/\s+/g, ' ').trim();
 
-    // Clean leading bullets or numbers if present
-    cleanPart = cleanPart.replace(/^(?:\([a-z0-9]+\)|\d+\.|[•\-\*])\s*/i, '');
+    // Clean leading/trailing symbols or headers
+    cleanItem = cleanItem.replace(/^(?:\([a-z0-9]+\)|\d+\.|[•\-\*])\s*/i, '');
+    cleanItem = cleanItem.replace(/PROJECT REQUIREMENTS.*$/i, '').trim();
 
-    if (/^It is to\b/i.test(cleanPart)) {
-      // Remove trailing section headers or non-objective artifacts if captured at the end
-      cleanPart = cleanPart.replace(/PROJECT REQUIREMENTS.*$/i, '').trim();
-
-      if (cleanPart.length > 15 && !matches.includes(cleanPart)) {
-        matches.push(cleanPart);
-      }
+    // SRAA objectives relate to security risks, compliance (S17/G3), guidelines, or vulnerability testing
+    if (cleanItem.length > 15 && !matches.includes(cleanItem)) {
+      matches.push(cleanItem);
     }
   }
 
   if (matches.length > 0) {
     // Format into lettered point form verbatim: (a) It is to... \n\n (b) It is to...
     return matches.map((item, index) => {
-      const letter = String.fromCharCode(97 + index); // 'a', 'b', 'c'...
+      const letter = String.fromCharCode(97 + index);
       return `(${letter}) ${item}`;
     }).join('\n\n');
   }
@@ -130,6 +156,7 @@ function extractSraaObjectives(text) {
  * Extracts PIAA Objectives directly from WAB text.
  */
 function extractPiaaObjectives(text) {
+  // Check for explicit PIA objectives block
   const match = text.match(/The objectives of PIA services are:[\s\S]*?(?=PROJECT REQUIREMENTS|4\.)/i) ||
                 text.match(/Privacy Impact Assessment.*?Objectives?[\s\S]*?(?=Scope|Requirements)/i);
 
@@ -140,22 +167,18 @@ function extractPiaaObjectives(text) {
     if (rawObj.length > 20) return rawObj;
   }
 
-  return "";
-}
-
-/**
- * Extracts SRAA Scope directly from WAB text.
- */
-function extractSraaScope(text) {
-  const match = text.match(/SCOPE OF THE SERVICES[\s\S]*?(?=BACKGROUND|PROJECT OBJECTIVES|2\.)/i) ||
-                text.match(/Scope of Service[\s\S]*?(?=Approach|Objectives)/i);
-
-  if (match) {
-    let rawScope = match[0]
-      .replace(/SCOPE OF THE SERVICES/i, '')
-      .replace(/Scope of Service/i, '')
-      .trim();
-    if (rawScope.length > 30) return rawScope;
+  // If PIA objectives are integrated inside Section 3 (PROJECT OBJECTIVES)
+  const section3Match = text.match(/PROJECT OBJECTIVES[\s\S]*?(?=PROJECT REQUIREMENTS|4\.\s*PROJECT REQUIREMENTS|$)/i);
+  if (section3Match) {
+    const rawSectionText = section3Match[0];
+    const piaMatches = [];
+    
+    // Privacy items start with bullet points or letters (a) - (h)
+    const regex = /(?:[a-h]\.|\([a-h]\)|[•\-\*])\s*(Identify the data privacy[\s\S]*?)(?=(?:[a-h]\.|\([a-h]\)|[•\-\*]|PROJECT REQUIREMENTS|$))/gi;
+    let m = regex.exec(rawSectionText);
+    if (m) {
+      return m[0].trim();
+    }
   }
 
   return "";
