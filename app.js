@@ -8,6 +8,16 @@ let repositoryTemplateBuffer = null;
 const TEMPLATE_FILE_NAME = "Project Plan template.docx";
 
 /**
+ * Helper function to safely locate the Zip engine constructor (PizZip or JSZip).
+ */
+function getZipEngine() {
+  if (typeof window.PizZip === 'function') return window.PizZip;
+  if (typeof window.pizzip === 'function') return window.pizzip;
+  if (typeof window.JSZip === 'function') return window.JSZip;
+  return null;
+}
+
+/**
  * Safely fetches the template file from the repository root on startup.
  */
 async function loadRepositoryTemplate() {
@@ -35,10 +45,9 @@ async function extractWabDataFromFile(file) {
     throw new Error("No file provided for extraction.");
   }
 
-  // Robust check for mammoth loaded via CDN
   const mammothEngine = window.mammoth;
   if (!mammothEngine || typeof mammothEngine.extractRawText !== 'function') {
-    throw new Error("Mammoth library is not available. Check CDN script inclusion.");
+    throw new Error("Mammoth library is not loaded. Please verify script inclusion.");
   }
 
   const fileBuffer = await file.arrayBuffer();
@@ -135,18 +144,17 @@ async function generateAndDownloadDocx(formData, originalFileName) {
     DATE_CLOSURE: formData.TENTATIVE_COMPLETION_DATE || "October 2026"
   };
 
-  // Safe window constructors for PizZip & docxtemplater across CDNs
-  const PizZipClass = window.PizZip || window.pizzip;
+  const ZipEngine = getZipEngine();
   const DocxtemplaterClass = window.docxtemplater || window.Docxtemplater;
 
-  if (!PizZipClass) {
-    throw new Error("PizZip library missing. Ensure pizzip.min.js is included.");
+  if (!ZipEngine) {
+    throw new Error("Zip library missing. Ensure JSZip or PizZip is loaded via CDN.");
   }
   if (!DocxtemplaterClass) {
-    throw new Error("Docxtemplater library missing. Ensure docxtemplater.js is included.");
+    throw new Error("Docxtemplater library missing. Ensure docxtemplater.js is loaded via CDN.");
   }
 
-  const zip = new PizZipClass(repositoryTemplateBuffer);
+  const zip = new ZipEngine(repositoryTemplateBuffer);
   const doc = new DocxtemplaterClass(zip, {
     paragraphLoop: true,
     linebreaks: true,
@@ -169,7 +177,7 @@ async function generateAndDownloadDocx(formData, originalFileName) {
   URL.revokeObjectURL(downloadUrl);
 }
 
-// Explicitly export to global scope for browser window context
+// Export functions globally to window context
 window.loadRepositoryTemplate = loadRepositoryTemplate;
 window.extractWabDataFromFile = extractWabDataFromFile;
 window.generateAndDownloadDocx = generateAndDownloadDocx;
