@@ -135,9 +135,19 @@ async function generateAndDownloadDocx(formData, originalFileName) {
     DATE_CLOSURE: formData.TENTATIVE_COMPLETION_DATE
   };
 
-  // Populate template
-  const zip = new window.PizZip(repositoryTemplateBuffer);
-  const doc = new window.docxtemplater(zip, {
+  // Safe constructor check for PizZip & docxtemplater
+  const PizZipClass = window.PizZip || window.pizzip;
+  const DocxtemplaterClass = window.docxtemplater || window.Docxtemplater;
+
+  if (!PizZipClass) {
+    throw new Error("PizZip library is not defined. Please check CDN script tags.");
+  }
+  if (!DocxtemplaterClass) {
+    throw new Error("Docxtemplater library is not defined. Please check CDN script tags.");
+  }
+
+  const zip = new PizZipClass(repositoryTemplateBuffer);
+  const doc = new DocxtemplaterClass(zip, {
     paragraphLoop: true,
     linebreaks: true,
   });
@@ -158,4 +168,5 @@ async function generateAndDownloadDocx(formData, originalFileName) {
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(downloadUrl);
+}
 }
