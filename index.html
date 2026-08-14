@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Project Plan Generator</title>
 
-  <!-- Load client-side libraries via CDN for GitHub Pages compatibility -->
+  <!-- CDN Dependencies -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pizzip/3.1.4/pizzip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/docxtemplater/3.37.11/docxtemplater.js"></script>
@@ -19,7 +19,7 @@
       color: #333;
     }
     .container {
-      max-width: 650px;
+      max-width: 700px;
       margin: 0 auto;
       background: #ffffff;
       padding: 30px;
@@ -39,11 +39,12 @@
     .drop-zone {
       border: 2px dashed #0070f3;
       border-radius: 6px;
-      padding: 40px 20px;
+      padding: 30px 20px;
       text-align: center;
       background: #f0f7ff;
       cursor: pointer;
       transition: background 0.2s ease;
+      margin-bottom: 20px;
     }
     .drop-zone:hover {
       background: #e1f0ff;
@@ -51,10 +52,50 @@
     .file-input {
       display: none;
     }
+    .form-section {
+      display: none;
+      border-top: 1px solid #eee;
+      padding-top: 20px;
+      margin-top: 20px;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    .form-group label {
+      display: block;
+      font-weight: 600;
+      font-size: 0.85rem;
+      margin-bottom: 5px;
+      color: #444;
+    }
+    .form-group input, .form-group select, .form-group textarea {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-sizing: border-box;
+      font-size: 0.95rem;
+    }
+    .form-row {
+      display: flex;
+      gap: 15px;
+    }
+    .form-row .form-group {
+      flex: 1;
+    }
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .checkbox-group input {
+      width: auto;
+    }
     .btn {
       display: inline-block;
       margin-top: 20px;
-      padding: 10px 20px;
+      padding: 12px 20px;
       background-color: #0070f3;
       color: white;
       border: none;
@@ -80,7 +121,7 @@
 
 <div class="container">
   <h1>Project Plan Generator</h1>
-  <p>Upload a Work Assignment Brief (<strong>.docx</strong>) to extract requirements and populate the repository's <code>Project Plan template.docx</code>.</p>
+  <p>Upload a Work Assignment Brief (<strong>.docx</strong>) to automatically extract project information, review or edit the fields below, and generate your plan.</p>
   
   <form id="uploadForm">
     <div class="drop-zone" id="dropZone">
@@ -88,41 +129,94 @@
       <input type="file" id="wabFileInput" class="file-input" accept=".docx" required />
     </div>
 
-    <button type="submit" id="submitBtn" class="btn" disabled>Generate Project Plan</button>
+    <!-- Dynamic Editable Fields Section -->
+    <div class="form-section" id="formSection">
+      <h3>Review & Edit Extracted Details</h3>
+
+      <!-- Department / Testee Details -->
+      <div class="form-row">
+        <div class="form-group">
+          <label for="deptName">Department / Testee Name</label>
+          <input type="text" id="deptName" name="DEPARTMENT_NAME" required />
+        </div>
+        <div class="form-group">
+          <label for="deptAbbr">Department Abbreviation</label>
+          <input type="text" id="deptAbbr" name="DEPARTMENT_ABBR" required />
+        </div>
+      </div>
+
+      <!-- System Selection Dropdown & Manual Input -->
+      <div class="form-group">
+        <label for="systemSelect">Detected Systems (Select from WAB)</label>
+        <select id="systemSelect">
+          <option value="">-- Select a detected system from document --</option>
+        </select>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="systemName">System Name</label>
+          <input type="text" id="systemName" name="SYSTEM_NAME" required />
+        </div>
+        <div class="form-group">
+          <label for="systemAbbr">System Abbreviation</label>
+          <input type="text" id="systemAbbr" name="SYSTEM_ABBR" required />
+        </div>
+      </div>
+
+      <!-- Dates -->
+      <div class="form-row">
+        <div class="form-group">
+          <label for="startDate">Start Date</label>
+          <input type="text" id="startDate" name="DATE_START" />
+        </div>
+        <div class="form-group">
+          <label for="completionDate">Completion Date</label>
+          <input type="text" id="completionDate" name="TENTATIVE_COMPLETION_DATE" />
+        </div>
+      </div>
+
+      <!-- Privacy Scope Toggle -->
+      <div class="form-group checkbox-group">
+        <input type="checkbox" id="hasPia" name="HAS_PIA" />
+        <label for="hasPia">Includes Privacy Impact Assessment (PIA)</label>
+      </div>
+
+      <button type="submit" id="submitBtn" class="btn">Generate & Download Project Plan</button>
+    </div>
   </form>
 
   <div id="status">Loading template from repository...</div>
 </div>
 
-<!-- Main Application Engine -->
+<!-- Main Application Script -->
 <script src="./app.js"></script>
 
 <script>
   const dropZone = document.getElementById('dropZone');
   const fileInput = document.getElementById('wabFileInput');
   const dropZoneText = document.getElementById('dropZoneText');
+  const formSection = document.getElementById('formSection');
   const submitBtn = document.getElementById('submitBtn');
   const statusDiv = document.getElementById('status');
 
-  // Load template from GitHub repository on page load
+  const systemSelect = document.getElementById('systemSelect');
+  const systemNameInput = document.getElementById('systemName');
+  const systemAbbrInput = document.getElementById('systemAbbr');
+
+  // Load repository template on load
   window.addEventListener('DOMContentLoaded', async () => {
     const success = await loadRepositoryTemplate();
     if (success) {
       statusDiv.textContent = `Repository template "${TEMPLATE_FILE_NAME}" loaded and ready.`;
-      if (fileInput.files.length > 0) submitBtn.disabled = false;
     } else {
-      statusDiv.textContent = `Error: Could not load "${TEMPLATE_FILE_NAME}" from repository root.`;
+      statusDiv.textContent = `Error: Could not load "${TEMPLATE_FILE_NAME}" from repository.`;
     }
   });
 
   dropZone.addEventListener('click', () => fileInput.click());
 
-  fileInput.addEventListener('change', (e) => {
-    if (e.target.files.length > 0) {
-      dropZoneText.textContent = `Selected: ${e.target.files[0].name}`;
-      if (repositoryTemplateBuffer) submitBtn.disabled = false;
-    }
-  });
+  fileInput.addEventListener('change', handleFileSelect);
 
   dropZone.addEventListener('dragover', (e) => {
     e.preventDefault();
@@ -138,21 +232,77 @@
     dropZone.style.background = '#f0f7ff';
     if (e.dataTransfer.files.length > 0) {
       fileInput.files = e.dataTransfer.files;
-      dropZoneText.textContent = `Selected: ${e.dataTransfer.files[0].name}`;
-      if (repositoryTemplateBuffer) submitBtn.disabled = false;
+      handleFileSelect();
     }
   });
 
-  document.getElementById('uploadForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
+  async function handleFileSelect() {
     const file = fileInput.files[0];
     if (!file) return;
 
-    statusDiv.textContent = 'Parsing WAB document and rendering template...';
+    dropZoneText.textContent = `Selected: ${file.name}`;
+    statusDiv.textContent = 'Extracting metadata from document...';
+
+    try {
+      const extractedData = await extractWabDataFromFile(file);
+      populateForm(extractedData);
+      formSection.style.display = 'block';
+      statusDiv.textContent = 'Metadata extracted successfully. Review or modify fields below.';
+    } catch (err) {
+      console.error(err);
+      statusDiv.textContent = `Error extracting data: ${err.message}`;
+    }
+  }
+
+  function populateForm(data) {
+    document.getElementById('deptName').value = data.DEPARTMENT_NAME || '';
+    document.getElementById('deptAbbr').value = data.DEPARTMENT_ABBR || '';
+    document.getElementById('systemName').value = data.SYSTEM_NAME || '';
+    document.getElementById('systemAbbr').value = data.SYSTEM_ABBR || '';
+    document.getElementById('startDate').value = data.DATE_START || '';
+    document.getElementById('completionDate').value = data.TENTATIVE_COMPLETION_DATE || '';
+    document.getElementById('hasPia').checked = data.HAS_PIA || false;
+
+    // Populate Dynamic System Dropdown
+    systemSelect.innerHTML = '<option value="">-- Select a detected system from document --</option>';
+    if (data.DETECTED_SYSTEMS && data.DETECTED_SYSTEMS.length > 0) {
+      data.DETECTED_SYSTEMS.forEach(sys => {
+        const opt = document.createElement('option');
+        opt.value = sys.name;
+        opt.dataset.abbr = sys.abbr;
+        opt.textContent = `${sys.name} (${sys.abbr})`;
+        systemSelect.appendChild(opt);
+      });
+    }
+  }
+
+  // Handle system selection dropdown change
+  systemSelect.addEventListener('change', (e) => {
+    const selectedOption = systemSelect.options[systemSelect.selectedIndex];
+    if (selectedOption && selectedOption.value) {
+      systemNameInput.value = selectedOption.value;
+      systemAbbrInput.value = selectedOption.dataset.abbr || '';
+    }
+  });
+
+  // Handle form submission to generate DOCX
+  document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    statusDiv.textContent = 'Generating project plan...';
     submitBtn.disabled = true;
 
     try {
-      await processUploadedWab(file);
+      const formData = {
+        DEPARTMENT_NAME: document.getElementById('deptName').value,
+        DEPARTMENT_ABBR: document.getElementById('deptAbbr').value,
+        SYSTEM_NAME: document.getElementById('systemName').value,
+        SYSTEM_ABBR: document.getElementById('systemAbbr').value,
+        DATE_START: document.getElementById('startDate').value,
+        TENTATIVE_COMPLETION_DATE: document.getElementById('completionDate').value,
+        HAS_PIA: document.getElementById('hasPia').checked
+      };
+
+      await generateAndDownloadDocx(formData, fileInput.files[0].name);
       statusDiv.textContent = 'Project plan generated and downloaded successfully!';
     } catch (err) {
       console.error(err);
